@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +12,6 @@ import { logout } from '@/lib/hooks/use-auth';
 import { useTranslation } from '@/lib/i18n';
 
 export default function ChangePasswordPage() {
-  const router = useRouter();
   const { t } = useTranslation();
   const [form, setForm] = useState({
     newUsername: '',
@@ -122,7 +120,7 @@ export default function ChangePasswordPage() {
               />
             </div>
             <div className="flex gap-2">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => router.back()}>
+              <Button type="button" variant="outline" className="flex-1" onClick={() => window.history.back()}>
                 <ArrowLeft className="mr-2 h-4 w-4" />{t('changePassword.back')}
               </Button>
               <Button type="submit" className="flex-1" disabled={loading}>

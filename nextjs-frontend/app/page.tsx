@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +13,6 @@ import { LanguageSwitcher } from '@/components/language-switcher';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function LoginPage() {
-  const router = useRouter();
   const { t } = useTranslation();
   const { siteName } = useSiteConfig();
   const [username, setUsername] = useState('');
@@ -41,7 +39,7 @@ export default function LoginPage() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      router.push('/dashboard');
+      window.location.href = '/dashboard';
       return;
     }
 
@@ -50,7 +48,7 @@ export default function LoginPage() {
         setCaptchaEnabled(true);
       }
     });
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     if (captchaEnabled) {
@@ -90,9 +88,9 @@ export default function LoginPage() {
         toast.success(t('login.loginSuccess'));
 
         if (res.data.requirePasswordChange) {
-          router.push('/change-password');
+          window.location.href = '/change-password';
         } else {
-          router.push('/dashboard');
+          window.location.href = '/dashboard';
         }
       } else {
         toast.error(res.msg || t('login.loginFailed'));
