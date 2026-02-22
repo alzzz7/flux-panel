@@ -148,7 +148,7 @@ export default function UserPage() {
 
   const handleResetFlow = async (id: number) => {
     if (!confirm(t('user.confirmResetTraffic'))) return;
-    const res = await resetUserFlow({ id, type: 0 });
+    const res = await resetUserFlow({ id, type: 1 });
     if (res.code === 0) { toast.success(t('user.trafficReset')); loadData(); }
     else toast.error(res.msg);
   };

@@ -12,6 +12,7 @@ func StartStatisticsTask() {
 	log.Println("[StatisticsTask] Recording initial flow snapshots...")
 	service.RecordForwardFlowSnapshots()
 	service.RecordXrayFlowSnapshots()
+	service.RecordUserFlowSnapshots()
 
 	go func() {
 		for {

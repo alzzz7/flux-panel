@@ -154,7 +154,7 @@ func Setup(r *gin.Engine) {
 
 		// Monitor
 		auth.POST("/monitor/node-health", middleware.Admin(), handler.MonitorNodeHealth)
-		auth.POST("/monitor/latency-history", middleware.Admin(), handler.MonitorLatencyHistory)
+		auth.POST("/monitor/latency-history", handler.MonitorLatencyHistory)
 		auth.POST("/monitor/forward-flow", middleware.Admin(), handler.MonitorForwardFlowHistory)
 		auth.POST("/monitor/traffic-overview", middleware.Admin(), handler.MonitorTrafficOverview)
 		auth.POST("/monitor/xray-traffic-overview", middleware.Admin(), handler.MonitorXrayTrafficOverview)

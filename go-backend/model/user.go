@@ -16,8 +16,8 @@ type User struct {
 	FlowResetType int    `gorm:"column:flow_reset_type" json:"flowResetType"`
 	FlowResetDay  int    `gorm:"column:flow_reset_day" json:"flowResetDay"`
 	Num           int    `gorm:"column:num" json:"num"`
-	GostEnabled   int    `gorm:"column:gost_enabled;default:1" json:"gostEnabled"`
-	XrayEnabled   int    `gorm:"column:xray_enabled;default:1" json:"xrayEnabled"`
+	GostEnabled   int    `gorm:"column:gost_enabled" json:"gostEnabled"`
+	XrayEnabled   int    `gorm:"column:xray_enabled" json:"xrayEnabled"`
 	CreatedTime   int64  `gorm:"column:created_time" json:"createdTime"`
 	UpdatedTime   int64  `gorm:"column:updated_time" json:"updatedTime"`
 	Status        int    `gorm:"column:status" json:"status"`

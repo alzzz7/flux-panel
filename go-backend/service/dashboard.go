@@ -103,14 +103,13 @@ func GetUserDashboardStats(userId int64) dto.R {
 	var forwardCount int64
 	DB.Model(&model.Forward{}).Where("user_id = ?", userId).Count(&forwardCount)
 
-	// Traffic history for this user
-	trafficData := getTrafficData(userId)
-	xrayData := getXrayTrafficData(userId)
+	// Traffic history for this user (per-user snapshots for accurate data)
+	gostData, xrayData := getUserFlowData(userId)
 
 	return dto.Ok(map[string]interface{}{
 		"package":            packageInfo,
 		"forwards":           forwardCount,
-		"trafficHistory":     trafficData.history,
+		"trafficHistory":     gostData.history,
 		"xrayTrafficHistory": xrayData.history,
 	})
 }
@@ -316,6 +315,103 @@ func getXrayTrafficData(userId int64) trafficData {
 	}
 
 	return trafficData{history: result, todayFlow: todayTotal}
+}
+
+// getUserFlowData returns 24h GOST and Xray traffic history for a specific user
+// using per-user flow snapshots (accurate, not inflated by shared inbounds).
+func getUserFlowData(userId int64) (gostData trafficData, xrayData trafficData) {
+	cutoff := time.Now().Unix() - 25*3600
+
+	var records []model.StatisticsUserFlow
+	DB.Where("user_id = ? AND record_time >= ?", userId, cutoff).
+		Order("record_time ASC").
+		Find(&records)
+
+	if len(records) == 0 {
+		return trafficData{history: buildEmptyTrafficHistory()}, trafficData{history: buildEmptyTrafficHistory()}
+	}
+
+	bucketSize := int64(3600)
+	type bucketSnap struct {
+		GostFlow int64
+		XrayFlow int64
+	}
+	bucketSnapshot := make(map[int64]bucketSnap)
+	for _, r := range records {
+		bt := (r.RecordTime / bucketSize) * bucketSize
+		bucketSnapshot[bt] = bucketSnap{r.GostFlow, r.XrayFlow}
+	}
+
+	sortedBuckets := make([]int64, 0, len(bucketSnapshot))
+	for b := range bucketSnapshot {
+		sortedBuckets = append(sortedBuckets, b)
+	}
+	sort.Slice(sortedBuckets, func(i, j int) bool { return sortedBuckets[i] < sortedBuckets[j] })
+
+	actualCutoff := time.Now().Unix() - 24*3600
+	gostBucketFlow := make(map[int64]int64)
+	xrayBucketFlow := make(map[int64]int64)
+
+	var prevGost, prevXray int64
+	firstSeen := false
+	for _, bt := range sortedBuckets {
+		snap := bucketSnapshot[bt]
+		if !firstSeen {
+			prevGost = snap.GostFlow
+			prevXray = snap.XrayFlow
+			firstSeen = true
+			continue
+		}
+		if bt < actualCutoff {
+			prevGost = snap.GostFlow
+			prevXray = snap.XrayFlow
+			continue
+		}
+		gostDelta := snap.GostFlow - prevGost
+		xrayDelta := snap.XrayFlow - prevXray
+		if gostDelta < 0 {
+			gostDelta = 0
+		}
+		if xrayDelta < 0 {
+			xrayDelta = 0
+		}
+		gostBucketFlow[bt] = gostDelta
+		xrayBucketFlow[bt] = xrayDelta
+		prevGost = snap.GostFlow
+		prevXray = snap.XrayFlow
+	}
+
+	now := time.Now()
+	nowTs := now.Unix()
+	gostHistory := make([]map[string]interface{}, 0, 24)
+	xrayHistory := make([]map[string]interface{}, 0, 24)
+	for i := 23; i >= 0; i-- {
+		bt := ((nowTs - int64(i)*3600) / bucketSize) * bucketSize
+		gostHistory = append(gostHistory, map[string]interface{}{
+			"time": bt,
+			"flow": gostBucketFlow[bt],
+		})
+		xrayHistory = append(xrayHistory, map[string]interface{}{
+			"time": bt,
+			"flow": xrayBucketFlow[bt],
+		})
+	}
+
+	var gostTotal, xrayTotal int64
+	cutoff24h := nowTs - 24*3600
+	for bt, flow := range gostBucketFlow {
+		if bt >= cutoff24h {
+			gostTotal += flow
+		}
+	}
+	for bt, flow := range xrayBucketFlow {
+		if bt >= cutoff24h {
+			xrayTotal += flow
+		}
+	}
+
+	return trafficData{history: gostHistory, todayFlow: gostTotal},
+		trafficData{history: xrayHistory, todayFlow: xrayTotal}
 }
 
 func buildEmptyTrafficHistory() []map[string]interface{} {

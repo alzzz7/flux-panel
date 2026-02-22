@@ -58,6 +58,7 @@ func main() {
 		&model.StatisticsForwardFlow{},
 		&model.StatisticsXrayFlow{},
 		&model.MonitorLatency{},
+		&model.StatisticsUserFlow{},
 	)
 
 	// Drop legacy unique constraints that are no longer needed

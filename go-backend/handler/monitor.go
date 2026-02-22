@@ -21,6 +21,15 @@ func MonitorLatencyHistory(c *gin.Context) {
 		c.JSON(http.StatusOK, dto.Err("参数错误"))
 		return
 	}
+	// Non-admin users can only query latency for their own forwards
+	roleId, _ := c.Get("roleId")
+	if roleId.(int) != 0 {
+		userId := c.GetInt64("userId")
+		if !service.IsForwardOwnedByUser(d.ForwardId, userId) {
+			c.JSON(http.StatusOK, dto.Err("无权限"))
+			return
+		}
+	}
 	c.JSON(http.StatusOK, service.GetForwardLatencyHistory(d.ForwardId, d.Hours))
 }
 

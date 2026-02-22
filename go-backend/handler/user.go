@@ -77,7 +77,7 @@ func UserUpdatePassword(c *gin.Context) {
 func UserReset(c *gin.Context) {
 	var d struct {
 		ID   int64 `json:"id" binding:"required"`
-		Type int   `json:"type" binding:"required"`
+		Type int   `json:"type"`
 	}
 	if err := c.ShouldBindJSON(&d); err != nil {
 		c.JSON(http.StatusOK, dto.Err("参数错误"))

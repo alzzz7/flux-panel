@@ -52,6 +52,9 @@ func RecordHourlyStatistics() {
 	// Record Xray flow snapshots
 	RecordXrayFlowSnapshots()
 
+	// Record per-user flow snapshots (for user dashboard charts)
+	RecordUserFlowSnapshots()
+
 	// Clean old monitor data
 	CleanOldMonitorData()
 
@@ -103,6 +106,24 @@ func RecordXrayFlowSnapshots() {
 	log.Printf("Xray 流量快照记录完成，共 %d 条", len(rows))
 }
 
+// RecordUserFlowSnapshots records per-user cumulative GOST+Xray flow for user dashboard charts.
+func RecordUserFlowSnapshots() {
+	var users []model.User
+	DB.Where("role_id != 0").Find(&users)
+
+	now := time.Now().Unix()
+	for _, user := range users {
+		record := model.StatisticsUserFlow{
+			UserId:     user.ID,
+			GostFlow:   user.InFlow + user.OutFlow,
+			XrayFlow:   user.XrayInFlow + user.XrayOutFlow,
+			RecordTime: now,
+		}
+		DB.Create(&record)
+	}
+	log.Printf("用户流量快照记录完成，共 %d 条", len(users))
+}
+
 // CleanOldMonitorData removes monitoring data older than the configured retention days.
 func CleanOldMonitorData() {
 	days := 7 // default
@@ -116,6 +137,7 @@ func CleanOldMonitorData() {
 	cutoff := time.Now().Unix() - int64(days*86400)
 	DB.Where("record_time < ?", cutoff).Delete(&model.StatisticsForwardFlow{})
 	DB.Where("record_time < ?", cutoff).Delete(&model.StatisticsXrayFlow{})
+	DB.Where("record_time < ?", cutoff).Delete(&model.StatisticsUserFlow{})
 	DB.Where("record_time < ?", cutoff).Delete(&model.MonitorLatency{})
 	log.Printf("已清理 %d 天前的监控数据", days)
 }

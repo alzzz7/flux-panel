@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// IsForwardOwnedByUser checks whether a forward belongs to the given user.
+func IsForwardOwnedByUser(forwardId, userId int64) bool {
+	var count int64
+	DB.Model(&model.Forward{}).Where("id = ? AND user_id = ?", forwardId, userId).Count(&count)
+	return count > 0
+}
+
 // GetNodeHealthList returns current health status for all nodes.
 func GetNodeHealthList() dto.R {
 	var nodes []model.Node
