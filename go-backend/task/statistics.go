@@ -7,6 +7,12 @@ import (
 )
 
 func StartStatisticsTask() {
+	// Record flow snapshots immediately on startup as baseline,
+	// so the first hourly run can compute deltas.
+	log.Println("[StatisticsTask] Recording initial flow snapshots...")
+	service.RecordForwardFlowSnapshots()
+	service.RecordXrayFlowSnapshots()
+
 	go func() {
 		for {
 			now := time.Now()
