@@ -205,3 +205,143 @@ func GetTrafficOverview(granularity string, hours int) dto.R {
 
 	return dto.Ok(result)
 }
+
+// GetXrayTrafficOverview returns global Xray traffic overview with incremental flow per bucket.
+func GetXrayTrafficOverview(granularity string, hours int) dto.R {
+	if hours <= 0 {
+		hours = 24
+	}
+	cutoff := time.Now().Unix() - int64((hours+1)*3600)
+
+	var records []model.StatisticsXrayFlow
+	DB.Where("record_time >= ?", cutoff).
+		Order("record_time ASC").
+		Find(&records)
+
+	type Bucket struct {
+		Time    int64 `json:"time"`
+		InFlow  int64 `json:"inFlow"`
+		OutFlow int64 `json:"outFlow"`
+	}
+
+	bucketSize := int64(3600)
+	if granularity == "day" {
+		bucketSize = 86400
+	}
+
+	type ibBucketKey struct {
+		InboundId int64
+		Bucket    int64
+	}
+	ibBucketSnapshot := make(map[ibBucketKey][2]int64) // [upFlow, downFlow]
+	for _, r := range records {
+		key := ibBucketKey{r.InboundId, (r.RecordTime / bucketSize) * bucketSize}
+		ibBucketSnapshot[key] = [2]int64{r.UpFlow, r.DownFlow}
+	}
+
+	bucketMap := make(map[int64]*Bucket)
+	ibIds := make(map[int64]bool)
+	allBuckets := make(map[int64]bool)
+	for k := range ibBucketSnapshot {
+		ibIds[k.InboundId] = true
+		allBuckets[k.Bucket] = true
+	}
+
+	sortedBuckets := make([]int64, 0, len(allBuckets))
+	for b := range allBuckets {
+		sortedBuckets = append(sortedBuckets, b)
+	}
+	sort.Slice(sortedBuckets, func(i, j int) bool { return sortedBuckets[i] < sortedBuckets[j] })
+
+	actualCutoff := time.Now().Unix() - int64(hours*3600)
+	for ibId := range ibIds {
+		var prevUp, prevDown int64
+		firstSeen := false
+		for _, bt := range sortedBuckets {
+			key := ibBucketKey{ibId, bt}
+			snap, ok := ibBucketSnapshot[key]
+			if !ok {
+				continue
+			}
+			if !firstSeen {
+				prevUp = snap[0]
+				prevDown = snap[1]
+				firstSeen = true
+				continue
+			}
+			if bt < actualCutoff {
+				prevUp = snap[0]
+				prevDown = snap[1]
+				continue
+			}
+			deltaUp := snap[0] - prevUp
+			deltaDown := snap[1] - prevDown
+			if deltaUp < 0 {
+				deltaUp = 0
+			}
+			if deltaDown < 0 {
+				deltaDown = 0
+			}
+			b, exists := bucketMap[bt]
+			if !exists {
+				b = &Bucket{Time: bt}
+				bucketMap[bt] = b
+			}
+			b.InFlow += deltaUp
+			b.OutFlow += deltaDown
+			prevUp = snap[0]
+			prevDown = snap[1]
+		}
+	}
+
+	result := make([]Bucket, 0, len(bucketMap))
+	for _, b := range bucketMap {
+		result = append(result, *b)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Time < result[j].Time })
+
+	return dto.Ok(result)
+}
+
+// GetXrayInboundFlowHistory returns incremental flow time-series for a single inbound.
+func GetXrayInboundFlowHistory(inboundId int64, hours int) dto.R {
+	if hours <= 0 {
+		hours = 24
+	}
+	cutoff := time.Now().Unix() - int64((hours+1)*3600)
+
+	var records []model.StatisticsXrayFlow
+	DB.Where("inbound_id = ? AND record_time >= ?", inboundId, cutoff).
+		Order("record_time ASC").
+		Find(&records)
+
+	actualCutoff := time.Now().Unix() - int64(hours*3600)
+
+	type FlowPoint struct {
+		RecordTime int64 `json:"recordTime"`
+		InFlow     int64 `json:"inFlow"`
+		OutFlow    int64 `json:"outFlow"`
+	}
+
+	result := make([]FlowPoint, 0, len(records))
+	for i := 1; i < len(records); i++ {
+		if records[i].RecordTime < actualCutoff {
+			continue
+		}
+		deltaUp := records[i].UpFlow - records[i-1].UpFlow
+		deltaDown := records[i].DownFlow - records[i-1].DownFlow
+		if deltaUp < 0 {
+			deltaUp = 0
+		}
+		if deltaDown < 0 {
+			deltaDown = 0
+		}
+		result = append(result, FlowPoint{
+			RecordTime: records[i].RecordTime,
+			InFlow:     deltaUp,
+			OutFlow:    deltaDown,
+		})
+	}
+
+	return dto.Ok(result)
+}

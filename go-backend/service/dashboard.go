@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"flux-panel/go-backend/dto"
 	"flux-panel/go-backend/model"
 	"flux-panel/go-backend/pkg"
@@ -33,6 +32,7 @@ func GetAdminDashboardStats() dto.R {
 
 	// Traffic history + today's traffic (computed from same snapshot data)
 	trafficData := getTrafficData(0)
+	xrayData := getXrayTrafficData(0)
 
 	// Top 5 users by traffic
 	type TopUser struct {
@@ -64,13 +64,15 @@ func GetAdminDashboardStats() dto.R {
 	}
 
 	return dto.Ok(map[string]interface{}{
-		"nodes":          map[string]int64{"total": totalNodes, "online": onlineNodes},
-		"users":          map[string]int64{"total": totalUsers},
-		"forwards":       map[string]int64{"total": totalForwards, "active": activeForwards},
-		"todayTraffic":   trafficData.todayFlow,
-		"trafficHistory": trafficData.history,
-		"topUsers":       topUsers,
-		"nodeList":       nodeList,
+		"nodes":              map[string]int64{"total": totalNodes, "online": onlineNodes},
+		"users":              map[string]int64{"total": totalUsers},
+		"forwards":           map[string]int64{"total": totalForwards, "active": activeForwards},
+		"todayTraffic":       trafficData.todayFlow,
+		"trafficHistory":     trafficData.history,
+		"todayXrayTraffic":   xrayData.todayFlow,
+		"xrayTrafficHistory": xrayData.history,
+		"topUsers":           topUsers,
+		"nodeList":           nodeList,
 	})
 }
 
@@ -97,11 +99,13 @@ func GetUserDashboardStats(userId int64) dto.R {
 
 	// Traffic history for this user
 	trafficData := getTrafficData(userId)
+	xrayData := getXrayTrafficData(userId)
 
 	return dto.Ok(map[string]interface{}{
-		"package":        packageInfo,
-		"forwards":       forwardCount,
-		"trafficHistory": trafficData.history,
+		"package":            packageInfo,
+		"forwards":           forwardCount,
+		"trafficHistory":     trafficData.history,
+		"xrayTrafficHistory": xrayData.history,
 	})
 }
 
@@ -188,25 +192,119 @@ func getTrafficData(userId int64) trafficData {
 		}
 	}
 
-	// Build 24-hour result
+	// Build 24-hour result — return Unix timestamps, let frontend format in browser timezone
 	now := time.Now()
 	nowTs := now.Unix()
 	result := make([]map[string]interface{}, 0, 24)
 	for i := 23; i >= 0; i-- {
 		bt := ((nowTs - int64(i)*3600) / bucketSize) * bucketSize
-		t := time.Unix(bt, 0)
-		timeStr := fmt.Sprintf("%02d:00", t.Hour())
 		result = append(result, map[string]interface{}{
-			"time": timeStr,
+			"time": bt,
 			"flow": bucketFlow[bt],
 		})
 	}
 
-	// Sum today's traffic (buckets from 00:00 today onward)
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
+	// Sum today's traffic — use UTC-based "last 24h" to avoid server-timezone dependency
 	var todayTotal int64
+	cutoff24h := nowTs - 24*3600
 	for bt, flow := range bucketFlow {
-		if bt >= todayStart {
+		if bt >= cutoff24h {
+			todayTotal += flow
+		}
+	}
+
+	return trafficData{history: result, todayFlow: todayTotal}
+}
+
+// getXrayTrafficData returns 24h Xray traffic history and today's total from statistics_xray_flow.
+// Uses cumulative snapshots with delta computation (same approach as GOST).
+// If userId=0, aggregates all inbounds; otherwise filters by user's inbound IDs.
+func getXrayTrafficData(userId int64) trafficData {
+	cutoff := time.Now().Unix() - 25*3600
+
+	var records []model.StatisticsXrayFlow
+	query := DB.Where("record_time >= ?", cutoff).Order("record_time ASC")
+	if userId > 0 {
+		var inboundIds []int64
+		DB.Model(&model.XrayClient{}).Where("user_id = ?", userId).Distinct("inbound_id").Pluck("inbound_id", &inboundIds)
+		if len(inboundIds) == 0 {
+			return trafficData{history: buildEmptyTrafficHistory()}
+		}
+		query = query.Where("inbound_id IN ?", inboundIds)
+	}
+	query.Find(&records)
+
+	if len(records) == 0 {
+		return trafficData{history: buildEmptyTrafficHistory()}
+	}
+
+	bucketSize := int64(3600)
+	type ibBucketKey struct {
+		InboundId int64
+		Bucket    int64
+	}
+	ibBucketSnapshot := make(map[ibBucketKey]int64) // total flow (up+down)
+	for _, r := range records {
+		key := ibBucketKey{r.InboundId, (r.RecordTime / bucketSize) * bucketSize}
+		ibBucketSnapshot[key] = r.UpFlow + r.DownFlow
+	}
+
+	ibIds := make(map[int64]bool)
+	allBuckets := make(map[int64]bool)
+	for k := range ibBucketSnapshot {
+		ibIds[k.InboundId] = true
+		allBuckets[k.Bucket] = true
+	}
+
+	sortedBuckets := make([]int64, 0, len(allBuckets))
+	for b := range allBuckets {
+		sortedBuckets = append(sortedBuckets, b)
+	}
+	sort.Slice(sortedBuckets, func(i, j int) bool { return sortedBuckets[i] < sortedBuckets[j] })
+
+	actualCutoff := time.Now().Unix() - 24*3600
+	bucketFlow := make(map[int64]int64)
+	for ibId := range ibIds {
+		var prev int64
+		firstSeen := false
+		for _, bt := range sortedBuckets {
+			snap, ok := ibBucketSnapshot[ibBucketKey{ibId, bt}]
+			if !ok {
+				continue
+			}
+			if !firstSeen {
+				prev = snap
+				firstSeen = true
+				continue
+			}
+			if bt < actualCutoff {
+				prev = snap
+				continue
+			}
+			delta := snap - prev
+			if delta < 0 {
+				delta = 0
+			}
+			bucketFlow[bt] += delta
+			prev = snap
+		}
+	}
+
+	now := time.Now()
+	nowTs := now.Unix()
+	result := make([]map[string]interface{}, 0, 24)
+	for i := 23; i >= 0; i-- {
+		bt := ((nowTs - int64(i)*3600) / bucketSize) * bucketSize
+		result = append(result, map[string]interface{}{
+			"time": bt,
+			"flow": bucketFlow[bt],
+		})
+	}
+
+	var todayTotal int64
+	cutoff24h := nowTs - 24*3600
+	for bt, flow := range bucketFlow {
+		if bt >= cutoff24h {
 			todayTotal += flow
 		}
 	}
@@ -216,11 +314,12 @@ func getTrafficData(userId int64) trafficData {
 
 func buildEmptyTrafficHistory() []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, 24)
-	now := time.Now().Hour()
+	nowTs := time.Now().Unix()
+	bucketSize := int64(3600)
 	for i := 23; i >= 0; i-- {
-		h := (now - i + 24) % 24
+		bt := ((nowTs - int64(i)*3600) / bucketSize) * bucketSize
 		result = append(result, map[string]interface{}{
-			"time": fmt.Sprintf("%02d:00", h),
+			"time": bt,
 			"flow": int64(0),
 		})
 	}

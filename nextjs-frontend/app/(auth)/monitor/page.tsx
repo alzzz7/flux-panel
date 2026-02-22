@@ -8,14 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Server, Cpu, HardDrive, Network, RefreshCw, Filter } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/use-auth';
-import { getNodeHealth, getLatencyHistory, getTrafficOverview } from '@/lib/api/monitor';
+import { getNodeHealth, getLatencyHistory, getTrafficOverview, getForwardFlowHistory, getXrayTrafficOverview, getXrayInboundFlowHistory } from '@/lib/api/monitor';
 import { post } from '@/lib/api/client';
 import { useTranslation } from '@/lib/i18n';
 import {
   AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 
-const LATENCY_COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c43', '#a4de6c', '#d0ed57', '#8dd1e1', '#83a6ed'];
+const CHART_COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c43', '#a4de6c', '#d0ed57', '#8dd1e1', '#83a6ed'];
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return '0 B';
@@ -70,6 +70,14 @@ interface ForwardItem {
   tunnelName?: string;
 }
 
+interface InboundItem {
+  id: number;
+  remark: string;
+  protocol: string;
+  port: number;
+  enable: number;
+}
+
 interface LatencyRecord {
   id: number;
   forwardId: number;
@@ -84,18 +92,39 @@ export default function MonitorPage() {
   const { t } = useTranslation();
   const [nodes, setNodes] = useState<NodeHealth[]>([]);
   const [forwards, setForwards] = useState<ForwardItem[]>([]);
-  const [trafficData, setTrafficData] = useState<any[]>([]);
-  const [granularity, setGranularity] = useState('hour');
+  const [inbounds, setInbounds] = useState<InboundItem[]>([]);
+
+  // GOST traffic state
+  const [gostTrafficData, setGostTrafficData] = useState<any[]>([]);
+  const [gostGranularity, setGostGranularity] = useState('hour');
+  const [gostMode, setGostMode] = useState<'total' | 'byForward'>('total');
+  const [gostSelectedForwards, setGostSelectedForwards] = useState<Set<number>>(new Set());
+  const [gostForwardChartData, setGostForwardChartData] = useState<any[]>([]);
+  const [gostFilterOpen, setGostFilterOpen] = useState(false);
+  const gostFilterRef = useRef<HTMLDivElement>(null);
+
+  // Xray traffic state
+  const [xrayTrafficData, setXrayTrafficData] = useState<any[]>([]);
+  const [xrayGranularity, setXrayGranularity] = useState('hour');
+  const [xrayMode, setXrayMode] = useState<'total' | 'byInbound'>('total');
+  const [xraySelectedInbounds, setXraySelectedInbounds] = useState<Set<number>>(new Set());
+  const [xrayInboundChartData, setXrayInboundChartData] = useState<any[]>([]);
+  const [xrayFilterOpen, setXrayFilterOpen] = useState(false);
+  const xrayFilterRef = useRef<HTMLDivElement>(null);
+
+  // Latency state
   const [latencyRange, setLatencyRange] = useState('6');
   const [selectedForwards, setSelectedForwards] = useState<Set<number>>(new Set());
   const [latencyChartData, setLatencyChartData] = useState<any[]>([]);
   const [latencyStatsData, setLatencyStatsData] = useState<Record<number, { avg: number; last: number; successRate: number }>>({});
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [latencyFilterOpen, setLatencyFilterOpen] = useState(false);
+  const latencyFilterRef = useRef<HTMLDivElement>(null);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const initialLoad = useRef(true);
-  const filterRef = useRef<HTMLDivElement>(null);
   const forwardsInitialized = useRef(false);
+  const inboundsInitialized = useRef(false);
 
   // Real-time speed tracking
   const [nodeSpeeds, setNodeSpeeds] = useState<Record<number, { uploadSpeed: number; downloadSpeed: number }>>({});
@@ -132,7 +161,6 @@ export default function MonitorPage() {
                 const dt = now - prev.time;
                 if (dt > 0) {
                   if (rx >= prev.rx && tx >= prev.tx) {
-                    // Normal increment — compute speed
                     setNodeSpeeds(s => ({
                       ...s,
                       [nodeId]: {
@@ -141,7 +169,6 @@ export default function MonitorPage() {
                       }
                     }));
                   } else {
-                    // Counter reset (node restarted) — reset speed to 0
                     setNodeSpeeds(s => ({
                       ...s,
                       [nodeId]: { downloadSpeed: 0, uploadSpeed: 0 }
@@ -151,7 +178,6 @@ export default function MonitorPage() {
               }
               prevBytesRef.current[nodeId] = { rx, tx, time: now };
 
-              // Also update node bytes for total display
               setNodes(prev => prev.map(n =>
                 n.id === nodeId
                   ? { ...n, bytesReceived: rx, bytesTransmitted: tx, cpuUsage: sysData.cpu_usage, memUsage: sysData.memory_usage, uptime: sysData.uptime }
@@ -185,15 +211,23 @@ export default function MonitorPage() {
     if (initialLoad.current) setLoading(true);
     setRefreshing(true);
 
-    const [healthRes, trafficRes, forwardRes] = await Promise.all([
+    const [healthRes, gostTrafficRes, xrayTrafficRes, forwardRes, inboundRes] = await Promise.all([
       getNodeHealth(),
-      getTrafficOverview(granularity, granularity === 'day' ? 168 : 24),
+      getTrafficOverview(gostGranularity, gostGranularity === 'day' ? 168 : 24),
+      getXrayTrafficOverview(xrayGranularity, xrayGranularity === 'day' ? 168 : 24),
       post('/forward/list', {}),
+      post('/xray/inbound/list', {}),
     ]);
 
     if (healthRes.code === 0) setNodes(healthRes.data || []);
-    if (trafficRes.code === 0) {
-      setTrafficData((trafficRes.data || []).map((d: any) => ({
+    if (gostTrafficRes.code === 0) {
+      setGostTrafficData((gostTrafficRes.data || []).map((d: any) => ({
+        ...d,
+        time: formatTime(d.time),
+      })));
+    }
+    if (xrayTrafficRes.code === 0) {
+      setXrayTrafficData((xrayTrafficRes.data || []).map((d: any) => ({
         ...d,
         time: formatTime(d.time),
       })));
@@ -204,14 +238,85 @@ export default function MonitorPage() {
       if (!forwardsInitialized.current) {
         const activeIds = new Set<number>(fwds.filter((f: ForwardItem) => f.status === 1).map((f: ForwardItem) => f.id));
         setSelectedForwards(activeIds);
+        setGostSelectedForwards(activeIds);
         forwardsInitialized.current = true;
+      }
+    }
+    if (inboundRes.code === 0) {
+      const ibs = inboundRes.data || [];
+      setInbounds(ibs);
+      if (!inboundsInitialized.current) {
+        const enabledIds = new Set<number>(ibs.filter((ib: InboundItem) => ib.enable === 1).map((ib: InboundItem) => ib.id));
+        setXraySelectedInbounds(enabledIds);
+        inboundsInitialized.current = true;
       }
     }
 
     setLoading(false);
     setRefreshing(false);
     initialLoad.current = false;
-  }, [granularity]);
+  }, [gostGranularity, xrayGranularity]);
+
+  // Load per-forward flow data when in byForward mode
+  const loadGostForwardData = useCallback(async () => {
+    if (gostMode !== 'byForward' || gostSelectedForwards.size === 0) {
+      setGostForwardChartData([]);
+      return;
+    }
+    const selected = forwards.filter(f => gostSelectedForwards.has(f.id));
+    const hours = gostGranularity === 'day' ? 168 : 24;
+    const allData: Record<number, any[]> = {};
+    await Promise.all(
+      selected.map(async (f) => {
+        const res = await getForwardFlowHistory(f.id, hours);
+        if (res.code === 0 && res.data) allData[f.id] = res.data;
+      })
+    );
+
+    const timeMap = new Map<number, Record<string, any>>();
+    for (const f of selected) {
+      for (const r of (allData[f.id] || [])) {
+        if (!timeMap.has(r.recordTime)) {
+          timeMap.set(r.recordTime, { time: formatTime(r.recordTime), _ts: r.recordTime });
+        }
+        const row = timeMap.get(r.recordTime)!;
+        row[f.name] = (r.inFlow || 0) + (r.outFlow || 0);
+      }
+    }
+    const merged = Array.from(timeMap.values()).sort((a, b) => a._ts - b._ts);
+    setGostForwardChartData(merged);
+  }, [gostMode, gostSelectedForwards, forwards, gostGranularity]);
+
+  // Load per-inbound flow data when in byInbound mode
+  const loadXrayInboundData = useCallback(async () => {
+    if (xrayMode !== 'byInbound' || xraySelectedInbounds.size === 0) {
+      setXrayInboundChartData([]);
+      return;
+    }
+    const selected = inbounds.filter(ib => xraySelectedInbounds.has(ib.id));
+    const hours = xrayGranularity === 'day' ? 168 : 24;
+    const allData: Record<number, any[]> = {};
+    await Promise.all(
+      selected.map(async (ib) => {
+        const res = await getXrayInboundFlowHistory(ib.id, hours);
+        if (res.code === 0 && res.data) allData[ib.id] = res.data;
+      })
+    );
+
+    const timeMap = new Map<number, Record<string, any>>();
+    for (const ib of selected) {
+      const label = ib.remark || `#${ib.id}`;
+      for (const r of (allData[ib.id] || [])) {
+        if (!timeMap.has(r.recordTime)) {
+          timeMap.set(r.recordTime, { time: formatTime(r.recordTime), _ts: r.recordTime });
+        }
+        const row = timeMap.get(r.recordTime)!;
+        row[label] = (r.inFlow || 0) + (r.outFlow || 0);
+      }
+    }
+    const merged = Array.from(timeMap.values()).sort((a, b) => a._ts - b._ts);
+    setXrayInboundChartData(merged);
+  }, [xrayMode, xraySelectedInbounds, inbounds, xrayGranularity]);
 
   const loadLatencyChartData = useCallback(async () => {
     const activeForwards = forwards.filter((f) => f.status === 1 && selectedForwards.has(f.id));
@@ -232,7 +337,6 @@ export default function MonitorPage() {
       })
     );
 
-    // Compute stats
     const stats: Record<number, { avg: number; last: number; successRate: number }> = {};
     for (const f of activeForwards) {
       const records = allData[f.id] || [];
@@ -250,7 +354,6 @@ export default function MonitorPage() {
     }
     setLatencyStatsData(stats);
 
-    // Merge data by recordTime
     const timeMap = new Map<number, Record<string, any>>();
     for (const f of activeForwards) {
       const records = allData[f.id] || [];
@@ -282,11 +385,27 @@ export default function MonitorPage() {
     }
   }, [loadLatencyChartData]);
 
-  // Click outside to close filter panel
+  // Load per-forward data when mode/selection changes
+  useEffect(() => {
+    if (forwards.length > 0) loadGostForwardData();
+  }, [loadGostForwardData]);
+
+  // Load per-inbound data when mode/selection changes
+  useEffect(() => {
+    if (inbounds.length > 0) loadXrayInboundData();
+  }, [loadXrayInboundData]);
+
+  // Click outside to close filter panels
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
-        setFilterOpen(false);
+      if (gostFilterRef.current && !gostFilterRef.current.contains(e.target as Node)) {
+        setGostFilterOpen(false);
+      }
+      if (xrayFilterRef.current && !xrayFilterRef.current.contains(e.target as Node)) {
+        setXrayFilterOpen(false);
+      }
+      if (latencyFilterRef.current && !latencyFilterRef.current.contains(e.target as Node)) {
+        setLatencyFilterOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -296,7 +415,7 @@ export default function MonitorPage() {
   if (!isAdmin) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">无权限访问</p>
+        <p className="text-muted-foreground">{t('common.noPermission')}</p>
       </div>
     );
   }
@@ -424,36 +543,210 @@ export default function MonitorPage() {
         </div>
       </div>
 
-      {/* Global Traffic Chart */}
+      {/* GOST Traffic Chart */}
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">{t('monitor.globalTrafficStats')}</CardTitle>
-            <Select value={granularity} onValueChange={(v) => setGranularity(v)}>
-              <SelectTrigger className="w-24">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="hour">{t('monitor.hour')}</SelectItem>
-                <SelectItem value="day">{t('monitor.day')}</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-lg">{t('monitor.gostTrafficStats')}</CardTitle>
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-md border overflow-hidden">
+                <button
+                  className={`px-3 py-1 text-xs ${gostMode === 'total' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                  onClick={() => setGostMode('total')}
+                >
+                  {t('monitor.totalTraffic')}
+                </button>
+                <button
+                  className={`px-3 py-1 text-xs ${gostMode === 'byForward' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                  onClick={() => setGostMode('byForward')}
+                >
+                  {t('monitor.byForward')}
+                </button>
+              </div>
+              <Select value={gostGranularity} onValueChange={(v) => setGostGranularity(v)}>
+                <SelectTrigger className="w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hour">{t('monitor.hour')}</SelectItem>
+                  <SelectItem value="day">{t('monitor.day')}</SelectItem>
+                </SelectContent>
+              </Select>
+              {gostMode === 'byForward' && (
+                <div className="relative" ref={gostFilterRef}>
+                  <Button variant="outline" size="sm" onClick={() => setGostFilterOpen(!gostFilterOpen)}>
+                    <Filter className="h-4 w-4 mr-1" />
+                    {gostSelectedForwards.size === forwards.filter(f => f.status === 1).length
+                      ? t('monitor.allForwards')
+                      : t('monitor.selected', { count: gostSelectedForwards.size })}
+                  </Button>
+                  {gostFilterOpen && (
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-md shadow-md p-3 min-w-[200px] max-h-[300px] overflow-y-auto">
+                      {forwards.filter(f => f.status === 1).map((f) => (
+                        <label key={f.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                          <Checkbox
+                            checked={gostSelectedForwards.has(f.id)}
+                            onCheckedChange={(checked) => {
+                              setGostSelectedForwards((prev) => {
+                                const next = new Set(prev);
+                                if (checked) next.add(f.id);
+                                else next.delete(f.id);
+                                return next;
+                              });
+                            }}
+                          />
+                          <span className="text-sm">{f.name}</span>
+                        </label>
+                      ))}
+                      {forwards.filter(f => f.status === 1).length === 0 && (
+                        <p className="text-sm text-muted-foreground">{t('monitor.noRunningForwards')}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          {trafficData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={trafficData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="time" fontSize={12} />
-                <YAxis fontSize={12} tickFormatter={(v) => formatBytes(v)} />
-                <Tooltip formatter={(v) => formatBytes(Number(v))} />
-                <Area type="monotone" dataKey="inFlow" name={t('monitor.inbound')} stroke="#8884d8" fill="#8884d8" fillOpacity={0.3} />
-                <Area type="monotone" dataKey="outFlow" name={t('monitor.outbound')} stroke="#82ca9d" fill="#82ca9d" fillOpacity={0.3} />
-              </AreaChart>
-            </ResponsiveContainer>
+          {gostMode === 'total' ? (
+            gostTrafficData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={gostTrafficData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" fontSize={12} />
+                  <YAxis fontSize={12} tickFormatter={(v) => formatBytes(v)} />
+                  <Tooltip formatter={(v) => formatBytes(Number(v))} />
+                  <Area type="monotone" dataKey="inFlow" name={t('monitor.inbound')} stroke="#8884d8" fill="#8884d8" fillOpacity={0.3} />
+                  <Area type="monotone" dataKey="outFlow" name={t('monitor.outbound')} stroke="#82ca9d" fill="#82ca9d" fillOpacity={0.3} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">{t('monitor.noTrafficData')}</div>
+            )
           ) : (
-            <div className="text-center py-12 text-muted-foreground">{t('monitor.noTrafficData')}</div>
+            gostForwardChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={gostForwardChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" fontSize={12} />
+                  <YAxis fontSize={12} tickFormatter={(v) => formatBytes(v)} />
+                  <Tooltip formatter={(v) => formatBytes(Number(v))} />
+                  <Legend />
+                  {forwards
+                    .filter(f => gostSelectedForwards.has(f.id))
+                    .map((f, i) => (
+                      <Line key={f.id} type="monotone" dataKey={f.name} stroke={CHART_COLORS[i % CHART_COLORS.length]} dot={false} />
+                    ))}
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">{t('monitor.noTrafficData')}</div>
+            )
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Xray Traffic Chart */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-lg">{t('monitor.xrayTrafficStats')}</CardTitle>
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-md border overflow-hidden">
+                <button
+                  className={`px-3 py-1 text-xs ${xrayMode === 'total' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                  onClick={() => setXrayMode('total')}
+                >
+                  {t('monitor.totalTraffic')}
+                </button>
+                <button
+                  className={`px-3 py-1 text-xs ${xrayMode === 'byInbound' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                  onClick={() => setXrayMode('byInbound')}
+                >
+                  {t('monitor.byInbound')}
+                </button>
+              </div>
+              <Select value={xrayGranularity} onValueChange={(v) => setXrayGranularity(v)}>
+                <SelectTrigger className="w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hour">{t('monitor.hour')}</SelectItem>
+                  <SelectItem value="day">{t('monitor.day')}</SelectItem>
+                </SelectContent>
+              </Select>
+              {xrayMode === 'byInbound' && (
+                <div className="relative" ref={xrayFilterRef}>
+                  <Button variant="outline" size="sm" onClick={() => setXrayFilterOpen(!xrayFilterOpen)}>
+                    <Filter className="h-4 w-4 mr-1" />
+                    {xraySelectedInbounds.size === inbounds.length
+                      ? t('monitor.allInbounds')
+                      : t('monitor.selected', { count: xraySelectedInbounds.size })}
+                  </Button>
+                  {xrayFilterOpen && (
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-md shadow-md p-3 min-w-[200px] max-h-[300px] overflow-y-auto">
+                      {inbounds.map((ib) => (
+                        <label key={ib.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                          <Checkbox
+                            checked={xraySelectedInbounds.has(ib.id)}
+                            onCheckedChange={(checked) => {
+                              setXraySelectedInbounds((prev) => {
+                                const next = new Set(prev);
+                                if (checked) next.add(ib.id);
+                                else next.delete(ib.id);
+                                return next;
+                              });
+                            }}
+                          />
+                          <span className="text-sm">{ib.remark || `#${ib.id}`} ({ib.protocol}:{ib.port})</span>
+                        </label>
+                      ))}
+                      {inbounds.length === 0 && (
+                        <p className="text-sm text-muted-foreground">{t('monitor.noXrayTrafficData')}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {xrayMode === 'total' ? (
+            xrayTrafficData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={xrayTrafficData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" fontSize={12} />
+                  <YAxis fontSize={12} tickFormatter={(v) => formatBytes(v)} />
+                  <Tooltip formatter={(v) => formatBytes(Number(v))} />
+                  <Area type="monotone" dataKey="inFlow" name={t('monitor.inbound')} stroke="#8884d8" fill="#8884d8" fillOpacity={0.3} />
+                  <Area type="monotone" dataKey="outFlow" name={t('monitor.outbound')} stroke="#82ca9d" fill="#82ca9d" fillOpacity={0.3} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">{t('monitor.noXrayTrafficData')}</div>
+            )
+          ) : (
+            xrayInboundChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={xrayInboundChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" fontSize={12} />
+                  <YAxis fontSize={12} tickFormatter={(v) => formatBytes(v)} />
+                  <Tooltip formatter={(v) => formatBytes(Number(v))} />
+                  <Legend />
+                  {inbounds
+                    .filter(ib => xraySelectedInbounds.has(ib.id))
+                    .map((ib, i) => (
+                      <Line key={ib.id} type="monotone" dataKey={ib.remark || `#${ib.id}`} stroke={CHART_COLORS[i % CHART_COLORS.length]} dot={false} />
+                    ))}
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">{t('monitor.noXrayTrafficData')}</div>
+            )
           )}
         </CardContent>
       </Card>
@@ -475,14 +768,14 @@ export default function MonitorPage() {
                   <SelectItem value="168">{t('monitor.days7')}</SelectItem>
                 </SelectContent>
               </Select>
-              <div className="relative" ref={filterRef}>
-                <Button variant="outline" size="sm" onClick={() => setFilterOpen(!filterOpen)}>
+              <div className="relative" ref={latencyFilterRef}>
+                <Button variant="outline" size="sm" onClick={() => setLatencyFilterOpen(!latencyFilterOpen)}>
                   <Filter className="h-4 w-4 mr-1" />
                   {selectedForwards.size === forwards.filter(f => f.status === 1).length
                     ? t('monitor.allForwards')
                     : t('monitor.selected', { count: selectedForwards.size })}
                 </Button>
-                {filterOpen && (
+                {latencyFilterOpen && (
                   <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-md shadow-md p-3 min-w-[200px]">
                     {forwards.filter(f => f.status === 1).map((f) => (
                       <label key={f.id} className="flex items-center gap-2 py-1 cursor-pointer">
@@ -521,7 +814,7 @@ export default function MonitorPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="time" fontSize={11} />
                   <YAxis fontSize={11} unit="ms" />
-                  <Tooltip formatter={(v: any) => (v != null ? `${v}ms` : '失败')} />
+                  <Tooltip formatter={(v: any) => (v != null ? `${v}ms` : t('monitor.timeout'))} />
                   <Legend />
                   {forwards
                     .filter((f) => f.status === 1 && selectedForwards.has(f.id))
@@ -530,7 +823,7 @@ export default function MonitorPage() {
                         key={f.id}
                         type="monotone"
                         dataKey={f.name}
-                        stroke={LATENCY_COLORS[i % LATENCY_COLORS.length]}
+                        stroke={CHART_COLORS[i % CHART_COLORS.length]}
                         dot={false}
                         connectNulls={false}
                       />

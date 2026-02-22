@@ -56,6 +56,7 @@ func main() {
 		&model.XrayTlsCert{},
 		&model.UserNode{},
 		&model.StatisticsForwardFlow{},
+		&model.StatisticsXrayFlow{},
 		&model.MonitorLatency{},
 	)
 

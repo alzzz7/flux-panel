@@ -49,6 +49,9 @@ func RecordHourlyStatistics() {
 	// Record forward flow snapshots
 	RecordForwardFlowSnapshots()
 
+	// Record Xray flow snapshots
+	RecordXrayFlowSnapshots()
+
 	// Clean old monitor data
 	CleanOldMonitorData()
 
@@ -73,6 +76,33 @@ func RecordForwardFlowSnapshots() {
 	log.Printf("转发流量快照记录完成，共 %d 条", len(forwards))
 }
 
+// RecordXrayFlowSnapshots records current up_traffic/down_traffic aggregated by inbound_id.
+func RecordXrayFlowSnapshots() {
+	type InboundFlow struct {
+		InboundId int64 `gorm:"column:inbound_id"`
+		UpFlow    int64 `gorm:"column:up_flow"`
+		DownFlow  int64 `gorm:"column:down_flow"`
+	}
+
+	var rows []InboundFlow
+	DB.Model(&model.XrayClient{}).
+		Select("inbound_id, SUM(up_traffic) as up_flow, SUM(down_traffic) as down_flow").
+		Group("inbound_id").
+		Find(&rows)
+
+	now := time.Now().Unix()
+	for _, r := range rows {
+		record := model.StatisticsXrayFlow{
+			InboundId:  r.InboundId,
+			UpFlow:     r.UpFlow,
+			DownFlow:   r.DownFlow,
+			RecordTime: now,
+		}
+		DB.Create(&record)
+	}
+	log.Printf("Xray 流量快照记录完成，共 %d 条", len(rows))
+}
+
 // CleanOldMonitorData removes monitoring data older than the configured retention days.
 func CleanOldMonitorData() {
 	days := 7 // default
@@ -85,6 +115,7 @@ func CleanOldMonitorData() {
 
 	cutoff := time.Now().Unix() - int64(days*86400)
 	DB.Where("record_time < ?", cutoff).Delete(&model.StatisticsForwardFlow{})
+	DB.Where("record_time < ?", cutoff).Delete(&model.StatisticsXrayFlow{})
 	DB.Where("record_time < ?", cutoff).Delete(&model.MonitorLatency{})
 	log.Printf("已清理 %d 天前的监控数据", days)
 }

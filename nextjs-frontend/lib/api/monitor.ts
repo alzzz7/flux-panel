@@ -7,3 +7,7 @@ export const getForwardFlowHistory = (forwardId: number, hours: number) =>
   post('/monitor/forward-flow', { forwardId, hours });
 export const getTrafficOverview = (granularity: string, hours: number) =>
   post('/monitor/traffic-overview', { granularity, hours });
+export const getXrayTrafficOverview = (granularity: string, hours: number) =>
+  post('/monitor/xray-traffic-overview', { granularity, hours });
+export const getXrayInboundFlowHistory = (inboundId: number, hours: number) =>
+  post('/monitor/xray-inbound-flow', { inboundId, hours });

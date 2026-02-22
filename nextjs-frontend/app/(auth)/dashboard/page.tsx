@@ -21,6 +21,11 @@ function formatBytes(bytes: number) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+function formatHour(ts: number) {
+  const d = new Date(ts * 1000);
+  return `${String(d.getHours()).padStart(2, '0')}:00`;
+}
+
 export default function DashboardPage() {
   const { isAdmin } = useAuth();
   const { t } = useTranslation();
@@ -168,40 +173,74 @@ function AdminDashboard({ stats, updateInfo }: { stats: any; updateInfo: UpdateI
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatBytes(stats.todayTraffic || 0)}</div>
+            <div className="text-2xl font-bold">{formatBytes((stats.todayTraffic || 0) + (stats.todayXrayTraffic || 0))}</div>
+            <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
+              <div>GOST: {formatBytes(stats.todayTraffic || 0)}</div>
+              <div>Xray: {formatBytes(stats.todayXrayTraffic || 0)}</div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Traffic Trend Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">{t('dashboard.trafficTrend')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.trafficHistory || []}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="time" className="text-xs" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => formatBytes(v)} />
-                <Tooltip
-                  formatter={(value) => [formatBytes(Number(value || 0)), t('dashboard.traffic')]}
-                  labelFormatter={(label) => t('dashboard.time', { time: label })}
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="flow"
-                  stroke="var(--color-chart-1)"
-                  fill="var(--color-chart-1)"
-                  fillOpacity={0.2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Traffic Trend Charts */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">{t('dashboard.gostTrafficTrend')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats.trafficHistory || []}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="time" className="text-xs" tick={{ fontSize: 12 }} tickFormatter={formatHour} />
+                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => formatBytes(v)} />
+                  <Tooltip
+                    formatter={(value) => [formatBytes(Number(value || 0)), t('dashboard.gostTraffic')]}
+                    labelFormatter={(label) => t('dashboard.time', { time: formatHour(Number(label)) })}
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="flow"
+                    stroke="var(--color-chart-1)"
+                    fill="var(--color-chart-1)"
+                    fillOpacity={0.2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">{t('dashboard.xrayTrafficTrend')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats.xrayTrafficHistory || []}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="time" className="text-xs" tick={{ fontSize: 12 }} tickFormatter={formatHour} />
+                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => formatBytes(v)} />
+                  <Tooltip
+                    formatter={(value) => [formatBytes(Number(value || 0)), t('dashboard.xrayTraffic')]}
+                    labelFormatter={(label) => t('dashboard.time', { time: formatHour(Number(label)) })}
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="flow"
+                    stroke="var(--color-chart-2)"
+                    fill="var(--color-chart-2)"
+                    fillOpacity={0.2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Node Overview Table */}
@@ -323,34 +362,64 @@ function UserDashboard({ stats }: { stats: any }) {
       </div>
 
       {/* User Traffic Trend */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">{t('dashboard.trafficTrend')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.trafficHistory || []}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="time" className="text-xs" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => formatBytes(v)} />
-                <Tooltip
-                  formatter={(value) => [formatBytes(Number(value || 0)), t('dashboard.traffic')]}
-                  labelFormatter={(label) => t('dashboard.time', { time: label })}
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="flow"
-                  stroke="var(--color-chart-1)"
-                  fill="var(--color-chart-1)"
-                  fillOpacity={0.2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">{t('dashboard.gostTrafficTrend')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats.trafficHistory || []}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="time" className="text-xs" tick={{ fontSize: 12 }} tickFormatter={formatHour} />
+                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => formatBytes(v)} />
+                  <Tooltip
+                    formatter={(value) => [formatBytes(Number(value || 0)), t('dashboard.gostTraffic')]}
+                    labelFormatter={(label) => t('dashboard.time', { time: formatHour(Number(label)) })}
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="flow"
+                    stroke="var(--color-chart-1)"
+                    fill="var(--color-chart-1)"
+                    fillOpacity={0.2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">{t('dashboard.xrayTrafficTrend')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats.xrayTrafficHistory || []}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="time" className="text-xs" tick={{ fontSize: 12 }} tickFormatter={formatHour} />
+                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => formatBytes(v)} />
+                  <Tooltip
+                    formatter={(value) => [formatBytes(Number(value || 0)), t('dashboard.xrayTraffic')]}
+                    labelFormatter={(label) => t('dashboard.time', { time: formatHour(Number(label)) })}
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="flow"
+                    stroke="var(--color-chart-2)"
+                    fill="var(--color-chart-2)"
+                    fillOpacity={0.2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

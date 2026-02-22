@@ -44,3 +44,24 @@ func MonitorTrafficOverview(c *gin.Context) {
 	c.ShouldBindJSON(&d)
 	c.JSON(http.StatusOK, service.GetTrafficOverview(d.Granularity, d.Hours))
 }
+
+func MonitorXrayTrafficOverview(c *gin.Context) {
+	var d struct {
+		Granularity string `json:"granularity"`
+		Hours       int    `json:"hours"`
+	}
+	c.ShouldBindJSON(&d)
+	c.JSON(http.StatusOK, service.GetXrayTrafficOverview(d.Granularity, d.Hours))
+}
+
+func MonitorXrayInboundFlowHistory(c *gin.Context) {
+	var d struct {
+		InboundId int64 `json:"inboundId" binding:"required"`
+		Hours     int   `json:"hours"`
+	}
+	if err := c.ShouldBindJSON(&d); err != nil {
+		c.JSON(http.StatusOK, dto.Err("参数错误"))
+		return
+	}
+	c.JSON(http.StatusOK, service.GetXrayInboundFlowHistory(d.InboundId, d.Hours))
+}
