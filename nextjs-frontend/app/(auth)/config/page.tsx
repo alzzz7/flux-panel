@@ -12,6 +12,7 @@ import { getConfigs, updateConfigs } from '@/lib/api/config';
 import { forceCheckUpdate, selfUpdate, UpdateInfo } from '@/lib/api/system';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { useTranslation } from '@/lib/i18n';
+import { useSiteConfig } from '@/lib/site-config';
 
 interface ConfigFieldDef {
   label: string;
@@ -126,6 +127,7 @@ function ConfigField({ configKey, value, onChange }: { configKey: string; value:
 export default function ConfigPage() {
   const { isAdmin } = useAuth();
   const { t } = useTranslation();
+  const { refreshSiteConfig } = useSiteConfig();
   const [configs, setConfigs] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -175,6 +177,7 @@ export default function ConfigPage() {
     if (res.code === 0) {
       toast.success(t('config.configSaved'));
       await loadData();
+      await refreshSiteConfig();
     } else {
       toast.error(res.msg || t('config.saveFailed'));
     }

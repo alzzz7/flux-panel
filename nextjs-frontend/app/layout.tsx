@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LanguageProvider } from "@/lib/i18n";
+import { SiteConfigProvider } from "@/lib/site-config";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,10 +34,12 @@ export default function RootLayout({
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <LanguageProvider>
-            <TooltipProvider>
-              {children}
-            </TooltipProvider>
-            <Toaster richColors position="top-center" />
+            <SiteConfigProvider>
+              <TooltipProvider>
+                {children}
+              </TooltipProvider>
+              <Toaster richColors position="top-center" />
+            </SiteConfigProvider>
           </LanguageProvider>
         </ThemeProvider>
       </body>

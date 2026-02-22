@@ -9,12 +9,14 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { login, checkCaptchaEnabled, generateCaptcha } from '@/lib/api/auth';
 import { useTranslation } from '@/lib/i18n';
+import { useSiteConfig } from '@/lib/site-config';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function LoginPage() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { siteName } = useSiteConfig();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -116,7 +118,8 @@ export default function LoginPage() {
       </div>
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <p className="text-2xl font-semibold">{t('login.title')}</p>
+          <p className="text-2xl font-semibold">{siteName}</p>
+          <p className="text-sm text-muted-foreground">{t('login.title')}</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">

@@ -14,6 +14,8 @@ import (
 var publicConfigKeys = map[string]bool{
 	"captcha_enabled": true,
 	"app_name":        true,
+	"site_name":       true,
+	"site_desc":       true,
 }
 
 func GetConfigs() dto.R {

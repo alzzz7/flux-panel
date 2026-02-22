@@ -19,6 +19,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { useTranslation } from '@/lib/i18n';
+import { useSiteConfig } from '@/lib/site-config';
 import { getVersion } from '@/lib/api/system';
 
 interface NavItem {
@@ -47,7 +48,7 @@ const navItems: NavItem[] = [
   { path: '/config', labelKey: 'nav.config', icon: <Settings className="h-4 w-4" />, adminOnly: true, section: 'system', sectionKey: 'nav.system' },
 ];
 
-function SidebarContent({ pathname, isAdmin, gostEnabled, xrayEnabled, onNavigate, version, t }: {
+function SidebarContent({ pathname, isAdmin, gostEnabled, xrayEnabled, onNavigate, version, t, siteName }: {
   pathname: string;
   isAdmin: boolean;
   gostEnabled: boolean;
@@ -55,6 +56,7 @@ function SidebarContent({ pathname, isAdmin, gostEnabled, xrayEnabled, onNavigat
   onNavigate: (path: string) => void;
   version: string;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  siteName: string;
 }) {
   const filtered = navItems.filter(item => {
     if (item.adminOnly && !isAdmin) return false;
@@ -70,7 +72,7 @@ function SidebarContent({ pathname, isAdmin, gostEnabled, xrayEnabled, onNavigat
         <div className="flex items-center gap-2">
           <Shield className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="text-sm font-bold">Flux Panel</h1>
+            <h1 className="text-sm font-bold">{siteName}</h1>
             <p className="text-xs text-muted-foreground">{version}</p>
           </div>
         </div>
@@ -124,6 +126,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   const { isAuthenticated, isAdmin, username, gostEnabled, xrayEnabled, loading } = useAuth();
   const isMobile = useIsMobile();
   const { t } = useTranslation();
+  const { siteName } = useSiteConfig();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [panelVersion, setPanelVersion] = useState('');
 
@@ -154,7 +157,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* Desktop sidebar */}
       {!isMobile && (
         <aside className="w-64 border-r bg-card flex-shrink-0">
-          <SidebarContent pathname={pathname} isAdmin={isAdmin} gostEnabled={gostEnabled} xrayEnabled={xrayEnabled} onNavigate={handleNavigate} version={panelVersion} t={t} />
+          <SidebarContent pathname={pathname} isAdmin={isAdmin} gostEnabled={gostEnabled} xrayEnabled={xrayEnabled} onNavigate={handleNavigate} version={panelVersion} t={t} siteName={siteName} />
         </aside>
       )}
 
@@ -171,7 +174,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="w-64 p-0">
-                  <SidebarContent pathname={pathname} isAdmin={isAdmin} gostEnabled={gostEnabled} xrayEnabled={xrayEnabled} onNavigate={handleNavigate} version={panelVersion} t={t} />
+                  <SidebarContent pathname={pathname} isAdmin={isAdmin} gostEnabled={gostEnabled} xrayEnabled={xrayEnabled} onNavigate={handleNavigate} version={panelVersion} t={t} siteName={siteName} />
                 </SheetContent>
               </Sheet>
             )}
