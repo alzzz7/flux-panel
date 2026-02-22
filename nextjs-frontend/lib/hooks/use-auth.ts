@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -42,14 +42,13 @@ export function useAuth(): AuthState {
 }
 
 export function useRequireAuth() {
-  const router = useRouter();
   const auth = useAuth();
 
   useEffect(() => {
     if (!auth.loading && !auth.isAuthenticated) {
-      router.push('/');
+      window.location.href = '/';
     }
-  }, [auth.loading, auth.isAuthenticated, router]);
+  }, [auth.loading, auth.isAuthenticated]);
 
   return auth;
 }

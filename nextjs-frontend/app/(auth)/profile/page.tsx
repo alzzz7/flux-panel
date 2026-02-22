@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { User, Database, Clock, ArrowRightLeft, KeyRound } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { getUserPackageInfo } from '@/lib/api/user';
 import { useAuth } from '@/lib/hooks/use-auth';
@@ -14,7 +13,6 @@ import { useTranslation } from '@/lib/i18n';
 export default function ProfilePage() {
   const { username, isAdmin } = useAuth();
   const { t } = useTranslation();
-  const router = useRouter();
   const [packageInfo, setPackageInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -155,9 +153,11 @@ export default function ProfilePage() {
             <CardTitle className="text-lg">{t('profile.quickActions')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button variant="outline" className="w-full justify-start" onClick={() => router.push('/change-password')}>
-              <KeyRound className="mr-2 h-4 w-4" />
-              {t('profile.changePassword')}
+            <Button variant="outline" className="w-full justify-start" asChild>
+              <a href="/change-password">
+                <KeyRound className="mr-2 h-4 w-4" />
+                {t('profile.changePassword')}
+              </a>
             </Button>
           </CardContent>
         </Card>

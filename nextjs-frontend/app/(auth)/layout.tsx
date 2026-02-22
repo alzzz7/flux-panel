@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
@@ -92,9 +91,8 @@ function SidebarContent({ pathname, isAdmin, gostEnabled, xrayEnabled, onNavigat
                   {sectionLabel}
                 </p>
               )}
-              <Link
+              <a
                 href={item.path}
-                prefetch={false}
                 onClick={() => onNavigate(item.path)}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
                   isActive
@@ -104,7 +102,7 @@ function SidebarContent({ pathname, isAdmin, gostEnabled, xrayEnabled, onNavigat
               >
                 {item.icon}
                 <span>{t(item.labelKey)}</span>
-              </Link>
+              </a>
             </div>
           );
         })}
@@ -121,7 +119,6 @@ function SidebarContent({ pathname, isAdmin, gostEnabled, xrayEnabled, onNavigat
 }
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, isAdmin, username, gostEnabled, xrayEnabled, loading } = useAuth();
   const isMobile = useIsMobile();
@@ -132,9 +129,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      router.push('/');
+      window.location.href = '/';
     }
-  }, [loading, isAuthenticated, router]);
+  }, [loading, isAuthenticated]);
 
   useEffect(() => {
     getVersion().then((v) => setPanelVersion(v ? `v${v}` : ''));
@@ -190,9 +187,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                 </Button>
               </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => router.push('/change-password')}>
-                <KeyRound className="mr-2 h-4 w-4" />
-                {t('nav.changePassword')}
+              <DropdownMenuItem asChild>
+                <a href="/change-password">
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  {t('nav.changePassword')}
+                </a>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={logout} className="text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
