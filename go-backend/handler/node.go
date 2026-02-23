@@ -5,9 +5,40 @@ import (
 	"flux-panel/go-backend/pkg"
 	"flux-panel/go-backend/service"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
+
+func versionLessThan(a, b string) bool {
+	parse := func(v string) [3]int {
+		v = strings.TrimSpace(v)
+		v = strings.TrimPrefix(v, "v")
+		if v == "" || v == "dev" {
+			return [3]int{0, 0, 0}
+		}
+		if idx := strings.Index(v, "-"); idx >= 0 {
+			v = v[:idx]
+		}
+		parts := strings.Split(v, ".")
+		var out [3]int
+		for i := 0; i < len(parts) && i < 3; i++ {
+			if n, err := strconv.Atoi(parts[i]); err == nil {
+				out[i] = n
+			}
+		}
+		return out
+	}
+	pa := parse(a)
+	pb := parse(b)
+	for i := 0; i < 3; i++ {
+		if pa[i] != pb[i] {
+			return pa[i] < pb[i]
+		}
+	}
+	return false
+}
 
 func NodeCreate(c *gin.Context) {
 	var d dto.NodeDto
@@ -105,7 +136,7 @@ func NodeUpdateBinary(c *gin.Context) {
 
 	// Legacy nodes (no disguise name) must be reinstalled manually
 	node := service.GetNodeById(d.ID)
-	if node != nil && node.DisguiseName == "" {
+	if node != nil && node.DisguiseName == "" && versionLessThan(node.Version, "2.1.0") {
 		c.JSON(http.StatusOK, dto.Err("该节点需要使用新的安装命令重新安装，请在节点管理页面点击安装按钮获取新命令"))
 		return
 	}
