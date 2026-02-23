@@ -80,6 +80,7 @@ func Setup(r *gin.Engine) {
 		auth.POST("/node/install/docker", middleware.Admin(), handler.NodeInstallDocker)
 		auth.POST("/node/reconcile", middleware.Admin(), handler.NodeReconcile)
 		auth.POST("/node/update-binary", middleware.Admin(), handler.NodeUpdateBinary)
+		auth.POST("/node/update-order", middleware.Admin(), handler.NodeUpdateOrder)
 
 		// Tunnel
 		auth.POST("/tunnel/create", middleware.Admin(), handler.TunnelCreate)
@@ -92,6 +93,7 @@ func Setup(r *gin.Engine) {
 		auth.POST("/tunnel/user/update", middleware.Admin(), handler.TunnelUserUpdate)
 		auth.POST("/tunnel/user/tunnel", handler.TunnelUserTunnel)
 		auth.POST("/tunnel/diagnose", middleware.Admin(), handler.TunnelDiagnose)
+		auth.POST("/tunnel/update-order", middleware.Admin(), handler.TunnelUpdateOrder)
 
 		// Forward
 		auth.POST("/forward/create", handler.ForwardCreate)

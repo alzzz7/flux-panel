@@ -98,6 +98,11 @@ func CreateForward(d dto.ForwardDto, userId int64, roleId int, userName string) 
 
 	// 4. Create forward entity and save
 	now := time.Now().UnixMilli()
+
+	// Auto-assign inx = max(inx) + 1
+	var maxInx int
+	DB.Model(&model.Forward{}).Select("COALESCE(MAX(inx), 0)").Scan(&maxInx)
+
 	forward := model.Forward{
 		UserId:        userId,
 		UserName:      userName,
@@ -110,6 +115,7 @@ func CreateForward(d dto.ForwardDto, userId int64, roleId int, userName string) 
 		InPort:        inPort,
 		OutPort:       outPort,
 		Status:        forwardStatusActive,
+		Inx:           maxInx + 1,
 		CreatedTime:   now,
 		UpdatedTime:   now,
 	}

@@ -13,3 +13,4 @@ export const getUserTunnelList = (queryData: any = {}) => post('/tunnel/user/lis
 export const removeUserTunnel = (params: any) => post('/tunnel/user/remove', params);
 export const updateUserTunnel = (data: any) => post('/tunnel/user/update', data);
 export const userTunnel = () => post('/tunnel/user/tunnel');
+export const updateTunnelOrder = (items: { id: number; inx: number }[]) => post('/tunnel/update-order', { items });

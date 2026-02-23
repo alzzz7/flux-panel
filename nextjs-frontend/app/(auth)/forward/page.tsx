@@ -219,16 +219,13 @@ export default function ForwardPage() {
             </TableHeader>
             <TableBody>
               {(() => {
-                const filtered = filterTunnelId && filterTunnelId !== 'all'
+                const isFiltered = filterTunnelId && filterTunnelId !== 'all';
+                const filtered = isFiltered
                   ? forwards.filter(f => f.tunnelId?.toString() === filterTunnelId)
                   : forwards;
                 const colSpan = isAdmin ? 9 : 8;
-                return loading ? (
-                <TableRow><TableCell colSpan={colSpan} className="text-center py-8">{t('common.loading')}</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={colSpan} className="text-center py-8 text-muted-foreground">{t('common.noData')}</TableCell></TableRow>
-              ) : (
-                filtered.map((f) => (
+
+                const renderRow = (f: any) => (
                   <TableRow key={f.id}>
                     <TableCell className="font-medium">{f.name}</TableCell>
                     {isAdmin && <TableCell className="text-sm text-muted-foreground">{f.userName || '-'}</TableCell>}
@@ -269,8 +266,42 @@ export default function ForwardPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              );
+                );
+
+                if (loading) {
+                  return <TableRow><TableCell colSpan={colSpan} className="text-center py-8">{t('common.loading')}</TableCell></TableRow>;
+                }
+                if (filtered.length === 0) {
+                  return <TableRow><TableCell colSpan={colSpan} className="text-center py-8 text-muted-foreground">{t('common.noData')}</TableCell></TableRow>;
+                }
+
+                // Group by tunnel when showing all (not filtered to specific tunnel)
+                if (!isFiltered && tunnels.length > 1) {
+                  const groups: Record<string, any[]> = {};
+                  const order: string[] = [];
+                  for (const f of filtered) {
+                    const tid = String(f.tunnelId);
+                    if (!groups[tid]) {
+                      groups[tid] = [];
+                      order.push(tid);
+                    }
+                    groups[tid].push(f);
+                  }
+                  return order.map(tid => {
+                    const groupForwards = groups[tid];
+                    const tunnelName = groupForwards[0]?.tunnelName || tid;
+                    return [
+                      <TableRow key={`group-${tid}`} className="bg-muted/50 hover:bg-muted/50">
+                        <TableCell colSpan={colSpan} className="py-1.5 text-xs font-semibold text-muted-foreground">
+                          {tunnelName} ({groupForwards.length})
+                        </TableCell>
+                      </TableRow>,
+                      ...groupForwards.map(renderRow),
+                    ];
+                  });
+                }
+
+                return filtered.map(renderRow);
               })()}
             </TableBody>
           </Table>

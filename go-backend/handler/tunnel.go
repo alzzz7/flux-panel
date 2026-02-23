@@ -85,6 +85,17 @@ func TunnelUserTunnel(c *gin.Context) {
 	c.JSON(http.StatusOK, service.GetUserAccessibleTunnels(userId, roleId))
 }
 
+func TunnelUpdateOrder(c *gin.Context) {
+	var d struct {
+		Items []dto.OrderItem `json:"items" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&d); err != nil {
+		c.JSON(http.StatusOK, dto.Err("参数错误"))
+		return
+	}
+	c.JSON(http.StatusOK, service.UpdateTunnelOrder(d.Items))
+}
+
 func TunnelDiagnose(c *gin.Context) {
 	var d struct {
 		ID int64 `json:"id" binding:"required"`

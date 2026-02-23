@@ -36,7 +36,7 @@ func CreateNode(d dto.NodeDto) dto.R {
 
 func GetAllNodes() dto.R {
 	var nodes []model.Node
-	DB.Order("created_time DESC").Find(&nodes)
+	DB.Order("inx ASC, created_time DESC").Find(&nodes)
 
 	result := make([]map[string]interface{}, 0, len(nodes))
 	for _, n := range nodes {
@@ -64,6 +64,7 @@ func GetAllNodes() dto.R {
 			"createdTime": n.CreatedTime,
 			"updatedTime": n.UpdatedTime,
 			"status":      status,
+			"inx":         n.Inx,
 		}
 
 		// Overlay live system info from WS cache
@@ -160,21 +161,28 @@ func DeleteNode(id int64) dto.R {
 	return dto.Ok("节点删除成功")
 }
 
+func UpdateNodeOrder(items []dto.OrderItem) dto.R {
+	for _, item := range items {
+		DB.Model(&model.Node{}).Where("id = ?", item.ID).Update("inx", item.Inx)
+	}
+	return dto.Ok("排序更新成功")
+}
+
 func GetUserAccessibleNodes(userId int64, roleId int) dto.R {
 	var nodes []model.Node
 	if roleId == 0 {
 		// Admin: return all nodes
-		DB.Order("created_time DESC").Find(&nodes)
+		DB.Order("inx ASC, created_time DESC").Find(&nodes)
 	} else {
 		// Check if user has any user_node records
 		var total int64
 		DB.Model(&model.UserNode{}).Where("user_id = ?", userId).Count(&total)
 		if total == 0 {
 			// Legacy user with no records: return all nodes
-			DB.Order("created_time DESC").Find(&nodes)
+			DB.Order("inx ASC, created_time DESC").Find(&nodes)
 		} else {
 			DB.Where("id IN (?)", DB.Model(&model.UserNode{}).Select("node_id").Where("user_id = ?", userId)).
-				Order("created_time DESC").Find(&nodes)
+				Order("inx ASC, created_time DESC").Find(&nodes)
 		}
 	}
 

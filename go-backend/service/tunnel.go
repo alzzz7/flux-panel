@@ -83,8 +83,15 @@ func CreateTunnel(d dto.TunnelDto) dto.R {
 
 func GetAllTunnels() dto.R {
 	var tunnels []model.Tunnel
-	DB.Order("created_time DESC").Find(&tunnels)
+	DB.Order("inx ASC, created_time DESC").Find(&tunnels)
 	return dto.Ok(tunnels)
+}
+
+func UpdateTunnelOrder(items []dto.OrderItem) dto.R {
+	for _, item := range items {
+		DB.Model(&model.Tunnel{}).Where("id = ?", item.ID).Update("inx", item.Inx)
+	}
+	return dto.Ok("排序更新成功")
 }
 
 func UpdateTunnel(d dto.TunnelUpdateDto) dto.R {

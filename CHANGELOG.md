@@ -1,5 +1,37 @@
 # Changelog
 
+## v2.0.20 — 修复节点权限保存 + Xray 权限回收清理 + 排序分组改进
+
+### Bug Fixes
+
+- **修复节点权限保存失败**：移除 UserNode 模型的 `default:1` 标签，GORM 不再将 `xray_enabled=0` / `gost_enabled=0` 回退为默认值 1，零值现可正确写入数据库
+- **撤销节点 Xray 权限后清理客户端**：编辑用户取消某节点的 Xray 权限时，自动热移除该节点上属于该用户的 Xray 客户端并标记为禁用
+
+### New Features
+
+- **Node / Tunnel 排序字段**：Node 和 Tunnel 新增 `inx` 排序字段，列表按 `inx ASC, created_time DESC` 排序；新增 `/node/update-order`、`/tunnel/update-order` API
+- **Forward 新建自动排序**：新建转发自动分配 `inx = max(inx) + 1`，确保排在列表末尾
+- **转发按隧道分组展示**：转发列表未筛选特定隧道时，按隧道自动分组，插入隧道名称标题行
+
+### Changed Files
+
+- `go-backend/model/user_node.go` — 移除 `default:1` 标签
+- `go-backend/model/node.go` — 添加 `Inx` 字段
+- `go-backend/model/tunnel.go` — 添加 `Inx` 字段
+- `go-backend/service/user.go` — 原生写入零值 + 新增 `disableUserXrayClientsOnNodes`
+- `go-backend/service/node.go` — 排序改 inx + `UpdateNodeOrder`
+- `go-backend/service/tunnel.go` — 排序改 inx + `UpdateTunnelOrder`
+- `go-backend/service/forward.go` — `CreateForward` 自动 inx
+- `go-backend/handler/node.go` — `NodeUpdateOrder` handler
+- `go-backend/handler/tunnel.go` — `TunnelUpdateOrder` handler
+- `go-backend/router/router.go` — 注册排序路由
+- `go-backend/dto/forward.go` — 新增 `OrderItem` DTO
+- `nextjs-frontend/lib/api/node.ts` — `updateNodeOrder`
+- `nextjs-frontend/lib/api/tunnel.ts` — `updateTunnelOrder`
+- `nextjs-frontend/app/(auth)/forward/page.tsx` — 按隧道分组展示
+
+---
+
 ## v1.9.15 — 修复面板自更新 compose project name + Reconcile Xray 探测
 
 ### Bug Fixes

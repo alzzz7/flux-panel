@@ -72,6 +72,17 @@ func NodeInstallDocker(c *gin.Context) {
 	c.JSON(http.StatusOK, service.GenerateDockerInstallCommand(d.ID, d.PanelAddr))
 }
 
+func NodeUpdateOrder(c *gin.Context) {
+	var d struct {
+		Items []dto.OrderItem `json:"items" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&d); err != nil {
+		c.JSON(http.StatusOK, dto.Err("参数错误"))
+		return
+	}
+	c.JSON(http.StatusOK, service.UpdateNodeOrder(d.Items))
+}
+
 func NodeReconcile(c *gin.Context) {
 	var d struct {
 		ID int64 `json:"id" binding:"required"`

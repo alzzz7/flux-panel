@@ -26,3 +26,9 @@ type ForwardOrderItem struct {
 	ID  int64 `json:"id"`
 	Inx int   `json:"inx"`
 }
+
+// OrderItem is a generic order item reused by node/tunnel order updates.
+type OrderItem struct {
+	ID  int64 `json:"id"`
+	Inx int   `json:"inx"`
+}

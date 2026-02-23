@@ -205,7 +205,6 @@ func CreateUser(d dto.UserDto) dto.R {
 	}
 
 	// 4. Save user_node records (prefer NodePermissions, fallback to NodeIds)
-	// Use Select to force GORM to write zero-value fields (overriding gorm default:1 tags)
 	if len(d.NodePermissions) > 0 {
 		for _, np := range d.NodePermissions {
 			un := model.UserNode{UserId: user.ID, NodeId: np.NodeId, XrayEnabled: 1, GostEnabled: 1}
@@ -215,11 +214,11 @@ func CreateUser(d dto.UserDto) dto.R {
 			if np.GostEnabled != nil {
 				un.GostEnabled = *np.GostEnabled
 			}
-			DB.Select("UserId", "NodeId", "XrayEnabled", "GostEnabled").Create(&un)
+			DB.Create(&un)
 		}
 	} else if len(d.NodeIds) > 0 {
 		for _, nodeId := range d.NodeIds {
-			DB.Select("UserId", "NodeId", "XrayEnabled", "GostEnabled").Create(&model.UserNode{UserId: user.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
+			DB.Create(&model.UserNode{UserId: user.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
 		}
 	}
 
@@ -350,9 +349,19 @@ func UpdateUser(d dto.UserUpdateDto) dto.R {
 	}
 
 	// Update user_node records (prefer NodePermissions, fallback to NodeIds)
-	// Use Select to force GORM to write zero-value fields (overriding gorm default:1 tags)
 	if d.NodePermissions != nil {
+		// Snapshot old xray-enabled nodes before deleting
+		var oldNodes []model.UserNode
+		DB.Where("user_id = ?", d.ID).Find(&oldNodes)
+		oldXrayNodes := make(map[int64]bool)
+		for _, on := range oldNodes {
+			if on.XrayEnabled == 1 {
+				oldXrayNodes[on.NodeId] = true
+			}
+		}
+
 		DB.Where("user_id = ?", d.ID).Delete(&model.UserNode{})
+		newXrayNodes := make(map[int64]bool)
 		for _, np := range d.NodePermissions {
 			un := model.UserNode{UserId: d.ID, NodeId: np.NodeId, XrayEnabled: 1, GostEnabled: 1}
 			if np.XrayEnabled != nil {
@@ -361,12 +370,26 @@ func UpdateUser(d dto.UserUpdateDto) dto.R {
 			if np.GostEnabled != nil {
 				un.GostEnabled = *np.GostEnabled
 			}
-			DB.Select("UserId", "NodeId", "XrayEnabled", "GostEnabled").Create(&un)
+			DB.Create(&un)
+			if un.XrayEnabled == 1 {
+				newXrayNodes[np.NodeId] = true
+			}
+		}
+
+		// Cleanup Xray clients on nodes that lost Xray permission
+		var lostNodeIds []int64
+		for nodeId := range oldXrayNodes {
+			if !newXrayNodes[nodeId] {
+				lostNodeIds = append(lostNodeIds, nodeId)
+			}
+		}
+		if len(lostNodeIds) > 0 {
+			disableUserXrayClientsOnNodes(d.ID, lostNodeIds)
 		}
 	} else if d.NodeIds != nil {
 		DB.Where("user_id = ?", d.ID).Delete(&model.UserNode{})
 		for _, nodeId := range d.NodeIds {
-			DB.Select("UserId", "NodeId", "XrayEnabled", "GostEnabled").Create(&model.UserNode{UserId: d.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
+			DB.Create(&model.UserNode{UserId: d.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
 		}
 	}
 
@@ -779,6 +802,25 @@ func disableAllUserXrayClients(userId int64) {
 			pkg.XrayRemoveClient(inbound.NodeId, inbound.Tag, client.Email)
 		}
 		DB.Model(&client).Update("enable", 0)
+	}
+}
+
+// disableUserXrayClientsOnNodes disables Xray clients for a user on specific nodes.
+func disableUserXrayClientsOnNodes(userId int64, nodeIds []int64) {
+	var clients []model.XrayClient
+	DB.Where("user_id = ? AND enable = 1", userId).Find(&clients)
+
+	for _, client := range clients {
+		var inbound model.XrayInbound
+		if err := DB.First(&inbound, client.InboundId).Error; err == nil {
+			for _, nid := range nodeIds {
+				if inbound.NodeId == nid {
+					pkg.XrayRemoveClient(inbound.NodeId, inbound.Tag, client.Email)
+					DB.Model(&client).Update("enable", 0)
+					break
+				}
+			}
+		}
 	}
 }
 
