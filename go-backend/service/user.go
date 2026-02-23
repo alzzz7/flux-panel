@@ -205,6 +205,7 @@ func CreateUser(d dto.UserDto) dto.R {
 	}
 
 	// 4. Save user_node records (prefer NodePermissions, fallback to NodeIds)
+	// Use Select to force GORM to write zero-value fields (overriding gorm default:1 tags)
 	if len(d.NodePermissions) > 0 {
 		for _, np := range d.NodePermissions {
 			un := model.UserNode{UserId: user.ID, NodeId: np.NodeId, XrayEnabled: 1, GostEnabled: 1}
@@ -214,11 +215,11 @@ func CreateUser(d dto.UserDto) dto.R {
 			if np.GostEnabled != nil {
 				un.GostEnabled = *np.GostEnabled
 			}
-			DB.Create(&un)
+			DB.Select("UserId", "NodeId", "XrayEnabled", "GostEnabled").Create(&un)
 		}
 	} else if len(d.NodeIds) > 0 {
 		for _, nodeId := range d.NodeIds {
-			DB.Create(&model.UserNode{UserId: user.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
+			DB.Select("UserId", "NodeId", "XrayEnabled", "GostEnabled").Create(&model.UserNode{UserId: user.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
 		}
 	}
 
@@ -349,6 +350,7 @@ func UpdateUser(d dto.UserUpdateDto) dto.R {
 	}
 
 	// Update user_node records (prefer NodePermissions, fallback to NodeIds)
+	// Use Select to force GORM to write zero-value fields (overriding gorm default:1 tags)
 	if d.NodePermissions != nil {
 		DB.Where("user_id = ?", d.ID).Delete(&model.UserNode{})
 		for _, np := range d.NodePermissions {
@@ -359,12 +361,12 @@ func UpdateUser(d dto.UserUpdateDto) dto.R {
 			if np.GostEnabled != nil {
 				un.GostEnabled = *np.GostEnabled
 			}
-			DB.Create(&un)
+			DB.Select("UserId", "NodeId", "XrayEnabled", "GostEnabled").Create(&un)
 		}
 	} else if d.NodeIds != nil {
 		DB.Where("user_id = ?", d.ID).Delete(&model.UserNode{})
 		for _, nodeId := range d.NodeIds {
-			DB.Create(&model.UserNode{UserId: d.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
+			DB.Select("UserId", "NodeId", "XrayEnabled", "GostEnabled").Create(&model.UserNode{UserId: d.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
 		}
 	}
 

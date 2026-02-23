@@ -312,7 +312,13 @@ function AdminDashboard({ stats, updateInfo }: { stats: any; updateInfo: UpdateI
                     <TableRow key={user.name}>
                       <TableCell className="font-medium">{idx + 1}</TableCell>
                       <TableCell>{user.name}</TableCell>
-                      <TableCell>{formatBytes(user.flow || 0)}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">{formatBytes(user.flow || 0)}</div>
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          <div>GOST: {formatBytes(user.gostFlow || 0)}</div>
+                          <div>Xray: {formatBytes(user.xrayFlow || 0)}</div>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
