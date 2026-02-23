@@ -1211,103 +1211,94 @@ func (w *WebSocketReporter) handleNodeUpdateBinary(data interface{}) error {
 	if !atomic.CompareAndSwapInt32(&w.updating, 0, 1) {
 		return fmt.Errorf("节点正在更新中，请勿重复操作")
 	}
+	defer atomic.StoreInt32(&w.updating, 0)
 
-	go func() {
-		defer atomic.StoreInt32(&w.updating, 0)
-		time.Sleep(1 * time.Second) // 等待 response 发送完成
+	downloadURL := fmt.Sprintf("%s/node-install/binary/%s", req.PanelAddr, runtime.GOARCH)
+	fmt.Printf("⬇️ 开始下载节点更新: %s\n", downloadURL)
 
-		downloadURL := fmt.Sprintf("%s/node-install/binary/%s", req.PanelAddr, runtime.GOARCH)
-		fmt.Printf("⬇️ 开始下载节点更新: %s\n", downloadURL)
+	// 1. 下载到临时文件
+	httpClient := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := httpClient.Get(downloadURL)
+	if err != nil {
+		return fmt.Errorf("下载失败: %v", err)
+	}
+	defer resp.Body.Close()
 
-		// 1. 下载到临时文件
-		httpClient := &http.Client{Timeout: 5 * time.Minute}
-		resp, err := httpClient.Get(downloadURL)
-		if err != nil {
-			fmt.Printf("❌ 下载失败: %v\n", err)
-			return
-		}
-		defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("下载失败，状态码: %d", resp.StatusCode)
+	}
 
-		if resp.StatusCode != http.StatusOK {
-			fmt.Printf("❌ 下载失败，状态码: %d\n", resp.StatusCode)
-			return
-		}
+	tmpFile, err := os.CreateTemp("", "gost-update-*")
+	if err != nil {
+		return fmt.Errorf("创建临时文件失败: %v", err)
+	}
+	tmpPath := tmpFile.Name()
 
-		tmpFile, err := os.CreateTemp("", "gost-update-*")
-		if err != nil {
-			fmt.Printf("❌ 创建临时文件失败: %v\n", err)
-			return
-		}
-		tmpPath := tmpFile.Name()
-
-		// 限制下载大小为 256MB，防止恶意/异常响应耗尽磁盘
-		const maxBinarySize = 256 * 1024 * 1024
-		written, err := io.Copy(tmpFile, io.LimitReader(resp.Body, maxBinarySize+1))
-		tmpFile.Close()
-		if err != nil {
-			os.Remove(tmpPath)
-			fmt.Printf("❌ 保存下载文件失败: %v\n", err)
-			return
-		}
-		if written > maxBinarySize {
-			os.Remove(tmpPath)
-			fmt.Printf("❌ 下载文件过大 (%d bytes)，已中止\n", written)
-			return
-		}
-		if written < 1024 {
-			os.Remove(tmpPath)
-			fmt.Printf("❌ 下载文件异常 (%d bytes)，文件过小\n", written)
-			return
-		}
-
-		// 2. 获取当前二进制路径
-		currentBinary, err := os.Executable()
-		if err != nil {
-			os.Remove(tmpPath)
-			fmt.Printf("❌ 获取当前二进制路径失败: %v\n", err)
-			return
-		}
-		// 解析软链接得到真实路径
-		currentBinary, _ = filepath.EvalSymlinks(currentBinary)
-
-		// 3. 备份旧二进制
-		backupPath := currentBinary + ".bak"
-		if err := copyFileForUpdate(currentBinary, backupPath); err != nil {
-			fmt.Printf("⚠️ 备份旧二进制失败: %v\n", err)
-		} else {
-			fmt.Printf("📦 已备份旧二进制到 %s\n", backupPath)
-		}
-
-		// 4. 替换二进制（先删除旧文件再写入，避免 "text file busy"）
-		os.Remove(currentBinary)
-		if err := copyFileForUpdate(tmpPath, currentBinary); err != nil {
-			fmt.Printf("❌ 替换二进制失败: %v\n", err)
-			// 尝试从备份恢复
-			if restoreErr := copyFileForUpdate(backupPath, currentBinary); restoreErr != nil {
-				fmt.Printf("❌ 恢复备份也失败: %v\n", restoreErr)
-			} else {
-				os.Chmod(currentBinary, 0755)
-				fmt.Printf("📦 已从备份恢复\n")
-			}
-			os.Remove(tmpPath)
-			return
-		}
-		os.Chmod(currentBinary, 0755)
+	// 限制下载大小为 256MB，防止恶意/异常响应耗尽磁盘
+	const maxBinarySize = 256 * 1024 * 1024
+	written, err := io.Copy(tmpFile, io.LimitReader(resp.Body, maxBinarySize+1))
+	tmpFile.Close()
+	if err != nil {
 		os.Remove(tmpPath)
+		return fmt.Errorf("保存下载文件失败: %v", err)
+	}
+	if written > maxBinarySize {
+		os.Remove(tmpPath)
+		return fmt.Errorf("下载文件过大 (%d bytes)", written)
+	}
+	if written < 1024 {
+		os.Remove(tmpPath)
+		return fmt.Errorf("下载文件异常 (%d bytes)，文件过小", written)
+	}
 
-		// 5. Docker 持久化：如果是 Docker 环境，保存到 /etc/gost/gost
-		if _, err := os.Stat("/.dockerenv"); err == nil {
-			persistPath := "/etc/gost/gost"
-			if err := copyFileForUpdate(currentBinary, persistPath); err != nil {
-				fmt.Printf("⚠️ Docker 持久化失败: %v\n", err)
-			} else {
-				os.Chmod(persistPath, 0755)
-				fmt.Printf("📦 已持久化到 %s\n", persistPath)
-			}
+	// 2. 获取当前二进制路径
+	currentBinary, err := os.Executable()
+	if err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("获取当前二进制路径失败: %v", err)
+	}
+	// 解析软链接得到真实路径
+	currentBinary, _ = filepath.EvalSymlinks(currentBinary)
+
+	// 3. 备份旧二进制
+	backupPath := currentBinary + ".bak"
+	if err := copyFileForUpdate(currentBinary, backupPath); err != nil {
+		fmt.Printf("⚠️ 备份旧二进制失败: %v\n", err)
+	} else {
+		fmt.Printf("📦 已备份旧二进制到 %s\n", backupPath)
+	}
+
+	// 4. 替换二进制（先删除旧文件再写入，避免 "text file busy"）
+	os.Remove(currentBinary)
+	if err := copyFileForUpdate(tmpPath, currentBinary); err != nil {
+		// 尝试从备份恢复
+		if restoreErr := copyFileForUpdate(backupPath, currentBinary); restoreErr != nil {
+			fmt.Printf("❌ 恢复备份也失败: %v\n", restoreErr)
+		} else {
+			os.Chmod(currentBinary, 0755)
+			fmt.Printf("📦 已从备份恢复\n")
 		}
+		os.Remove(tmpPath)
+		return fmt.Errorf("替换二进制失败: %v", err)
+	}
+	os.Chmod(currentBinary, 0755)
+	os.Remove(tmpPath)
 
-		fmt.Printf("✅ 节点更新完成 (%d bytes)，正在退出进程...\n", written)
-		// 6. 退出进程，由 systemd/Docker 自动重启
+	// 5. Docker 持久化：如果是 Docker 环境，保存到 /etc/gost/gost
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		persistPath := "/etc/gost/gost"
+		if err := copyFileForUpdate(currentBinary, persistPath); err != nil {
+			fmt.Printf("⚠️ Docker 持久化失败: %v\n", err)
+		} else {
+			os.Chmod(persistPath, 0755)
+			fmt.Printf("📦 已持久化到 %s\n", persistPath)
+		}
+	}
+
+	fmt.Printf("✅ 节点更新完成 (%d bytes)，正在退出进程...\n", written)
+	// 6. 延迟退出，确保响应先发送回面板
+	go func() {
+		time.Sleep(1 * time.Second)
 		os.Exit(0)
 	}()
 

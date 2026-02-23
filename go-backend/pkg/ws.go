@@ -334,6 +334,10 @@ func (m *WSManager) readAdminMessages(sessionId string, as *AdminSession) {
 }
 
 func (m *WSManager) SendMsg(nodeId int64, data interface{}, cmdType string) *dto.GostResponse {
+	return m.SendMsgWithTimeout(nodeId, data, cmdType, 10*time.Second)
+}
+
+func (m *WSManager) SendMsgWithTimeout(nodeId int64, data interface{}, cmdType string, timeout time.Duration) *dto.GostResponse {
 	val, ok := m.nodeSessions.Load(nodeId)
 	if !ok {
 		return &dto.GostResponse{Msg: "节点不在线"}
@@ -357,7 +361,7 @@ func (m *WSManager) SendMsg(nodeId int64, data interface{}, cmdType string) *dto
 	case result := <-ch:
 		log.Printf("成功发送消息到节点 %d 并收到响应: %s", nodeId, result.Msg)
 		return result
-	case <-time.After(10 * time.Second):
+	case <-time.After(timeout):
 		m.pendingRequests.Delete(requestId)
 		log.Printf("节点 %d 响应超时", nodeId)
 		return &dto.GostResponse{Msg: "等待响应超时"}

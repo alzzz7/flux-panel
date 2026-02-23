@@ -5,6 +5,7 @@ import (
 	"flux-panel/go-backend/dto"
 	"flux-panel/go-backend/model"
 	"strings"
+	"time"
 )
 
 func AddLimiters(nodeId int64, name int64, speed string) *dto.GostResponse {
@@ -150,7 +151,7 @@ func ResumeRemoteService(nodeId int64, name string) *dto.GostResponse {
 
 func NodeUpdateBinary(nodeId int64, panelAddr string) *dto.GostResponse {
 	data := map[string]interface{}{"panelAddr": panelAddr}
-	return WS.SendMsg(nodeId, data, "NodeUpdateBinary")
+	return WS.SendMsgWithTimeout(nodeId, data, "NodeUpdateBinary", 6*time.Minute)
 }
 
 func AddChains(nodeId int64, name string, remoteAddr string, protocol string, interfaceName string) *dto.GostResponse {
