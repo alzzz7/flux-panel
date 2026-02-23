@@ -328,8 +328,8 @@ func DeleteXrayClient(id int64, userId int64, roleId int) dto.R {
 		}
 	}
 
-	// Hot remove client first (no Xray restart needed)
-	if inbound.ID > 0 {
+	// Hot remove client (skip if node is offline — services aren't running)
+	if inbound.ID > 0 && pkg.WS != nil && pkg.WS.IsNodeOnline(inbound.NodeId) {
 		result := pkg.XrayRemoveClient(inbound.NodeId, inbound.Tag, client.Email)
 		if result != nil && result.Msg != "OK" {
 			return dto.Err("Xray 热移除客户端失败: " + result.Msg)

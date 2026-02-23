@@ -371,10 +371,12 @@ func DeleteXrayInbound(id int64, userId int64, roleId int) dto.R {
 		return dto.Err("无权操作此入站")
 	}
 
-	// Hot remove inbound first (no Xray restart needed)
-	result := pkg.XrayRemoveInbound(inbound.NodeId, inbound.Tag)
-	if result != nil && result.Msg != "OK" {
-		return dto.Err("Xray 热移除入站失败: " + result.Msg)
+	// Hot remove inbound (skip if node is offline — services aren't running)
+	if pkg.WS != nil && pkg.WS.IsNodeOnline(inbound.NodeId) {
+		result := pkg.XrayRemoveInbound(inbound.NodeId, inbound.Tag)
+		if result != nil && result.Msg != "OK" {
+			return dto.Err("Xray 热移除入站失败: " + result.Msg)
+		}
 	}
 
 	// Delete associated clients from DB
