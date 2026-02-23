@@ -133,6 +133,7 @@ const zh = {
     quota: '限额 {num}',
     usedTraffic: '已用流量',
     totalFlow: '总额 {flow} GB',
+    totalAccumulated: '累计总流量',
     expireTime: '到期时间',
   },
   forward: {
@@ -625,6 +626,10 @@ const zh = {
     noProtocolLinks: '暂无协议链接。请确保管理员已为您分配客户端。',
     noPermission: '你没有 Xray 代理权限，请联系管理员',
     copied: '{label}已复制到剪贴板',
+    resetToken: '重置订阅地址',
+    confirmReset: '确定要重置订阅地址吗？重置后旧地址将立即失效。',
+    resetSuccess: '订阅地址已重置',
+    resetFailed: '重置订阅地址失败',
   },
   inboundDialog: {
     editInbound: '编辑入站',

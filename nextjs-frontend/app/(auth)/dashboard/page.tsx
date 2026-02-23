@@ -178,6 +178,12 @@ function AdminDashboard({ stats, updateInfo }: { stats: any; updateInfo: UpdateI
               <div>GOST: {formatBytes(stats.todayTraffic || 0)}</div>
               <div>Xray: {formatBytes(stats.todayXrayTraffic || 0)}</div>
             </div>
+            {((stats.totalGostFlow || 0) + (stats.totalXrayFlow || 0)) > 0 && (
+              <div className="text-xs text-muted-foreground mt-2 pt-2 border-t space-y-0.5">
+                <div>{t('dashboard.totalAccumulated')}: {formatBytes((stats.totalGostFlow || 0) + (stats.totalXrayFlow || 0))}</div>
+                <div>GOST: {formatBytes(stats.totalGostFlow || 0)} / Xray: {formatBytes(stats.totalXrayFlow || 0)}</div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -345,8 +351,17 @@ function UserDashboard({ stats }: { stats: any }) {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatBytes((pkg.inFlow || 0) + (pkg.outFlow || 0))}</div>
-            <p className="text-xs text-muted-foreground">{t('dashboard.totalFlow', { flow: pkg.flow || 0 })}</p>
+            <div className="text-2xl font-bold">
+              {formatBytes((pkg.inFlow || 0) + (pkg.outFlow || 0) + (pkg.xrayInFlow || 0) + (pkg.xrayOutFlow || 0))}
+            </div>
+            <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
+              {(pkg.flow > 0 || (pkg.inFlow || 0) + (pkg.outFlow || 0) > 0) && (
+                <div>GOST: {formatBytes((pkg.inFlow || 0) + (pkg.outFlow || 0))} / {pkg.flow ? `${pkg.flow} GB` : '∞'}</div>
+              )}
+              {(pkg.xrayFlow > 0 || (pkg.xrayInFlow || 0) + (pkg.xrayOutFlow || 0) > 0) && (
+                <div>Xray: {formatBytes((pkg.xrayInFlow || 0) + (pkg.xrayOutFlow || 0))} / {pkg.xrayFlow ? `${pkg.xrayFlow} GB` : '∞'}</div>
+              )}
+            </div>
           </CardContent>
         </Card>
         {pkg.expTime && (

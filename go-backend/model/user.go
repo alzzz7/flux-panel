@@ -18,6 +18,7 @@ type User struct {
 	Num           int    `gorm:"column:num" json:"num"`
 	GostEnabled   int    `gorm:"column:gost_enabled" json:"gostEnabled"`
 	XrayEnabled   int    `gorm:"column:xray_enabled" json:"xrayEnabled"`
+	SubToken      string `gorm:"column:sub_token" json:"subToken"`
 	CreatedTime   int64  `gorm:"column:created_time" json:"createdTime"`
 	UpdatedTime   int64  `gorm:"column:updated_time" json:"updatedTime"`
 	Status        int    `gorm:"column:status" json:"status"`

@@ -135,6 +135,7 @@ const en: Translations = {
     quota: 'Quota {num}',
     usedTraffic: 'Used Traffic',
     totalFlow: 'Total {flow} GB',
+    totalAccumulated: 'Total Accumulated',
     expireTime: 'Expires',
   },
   forward: {
@@ -627,6 +628,10 @@ const en: Translations = {
     noProtocolLinks: 'No protocol links. Please make sure an admin has assigned clients to you.',
     noPermission: 'You don\'t have Xray proxy permission, please contact admin',
     copied: '{label} copied to clipboard',
+    resetToken: 'Reset URL',
+    confirmReset: 'Are you sure you want to reset the subscription URL? The old URL will become invalid immediately.',
+    resetSuccess: 'Subscription URL has been reset',
+    resetFailed: 'Failed to reset subscription URL',
   },
   inboundDialog: {
     editInbound: 'Edit Inbound',

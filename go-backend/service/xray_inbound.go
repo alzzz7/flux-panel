@@ -114,8 +114,15 @@ func CreateXrayInbound(d dto.XrayInboundDto, userId int64, roleId int) dto.R {
 		listen = d.Listen
 	}
 
+	// Non-admin: bind inbound to self; admin: userId=0 (system-owned)
+	inboundUserId := int64(0)
+	if roleId != 0 {
+		inboundUserId = userId
+	}
+
 	inbound := model.XrayInbound{
 		NodeId:             d.NodeId,
+		UserId:             inboundUserId,
 		Tag:                d.Tag,
 		Protocol:           d.Protocol,
 		Listen:             listen,
@@ -174,6 +181,13 @@ func ListXrayInbounds(nodeId *int64, userId int64, roleId int) dto.R {
 		query = query.Where("node_id IN ?", nodeIds)
 	}
 
+	if roleId != 0 {
+		// Non-admin: only see own inbounds OR inbounds that contain own clients
+		query = query.Where("user_id = ? OR id IN (?)",
+			userId,
+			DB.Model(&model.XrayClient{}).Select("DISTINCT inbound_id").Where("user_id = ?", userId))
+	}
+
 	var list []model.XrayInbound
 	query.Find(&list)
 
@@ -183,18 +197,25 @@ func ListXrayInbounds(nodeId *int64, userId int64, roleId int) dto.R {
 		ClientCount int
 	}
 	var counts []countRow
-	DB.Model(&model.XrayClient{}).Select("inbound_id, COUNT(*) as client_count").Group("inbound_id").Find(&counts)
+	countQuery := DB.Model(&model.XrayClient{}).Select("inbound_id, COUNT(*) as client_count").Group("inbound_id")
+	if roleId != 0 {
+		// Non-admin: only count own clients
+		countQuery = countQuery.Where("user_id = ?", userId)
+	}
+	countQuery.Find(&counts)
 	countMap := make(map[int64]int, len(counts))
 	for _, c := range counts {
 		countMap[c.InboundId] = c.ClientCount
 	}
 
-	// Build response with client count
+	// Build response with client count and ownership flag
 	result := make([]map[string]interface{}, 0, len(list))
 	for _, ib := range list {
+		isOwner := roleId == 0 || ib.UserId == userId
 		result = append(result, map[string]interface{}{
 			"id":                 ib.ID,
 			"nodeId":             ib.NodeId,
+			"userId":             ib.UserId,
 			"tag":                ib.Tag,
 			"protocol":           ib.Protocol,
 			"listen":             ib.Listen,
@@ -208,6 +229,7 @@ func ListXrayInbounds(nodeId *int64, userId int64, roleId int) dto.R {
 			"createdTime":        ib.CreatedTime,
 			"updatedTime":        ib.UpdatedTime,
 			"clientCount":        countMap[ib.ID],
+			"isOwner":            isOwner,
 		})
 	}
 	return dto.Ok(result)
@@ -225,6 +247,11 @@ func UpdateXrayInbound(d dto.XrayInboundUpdateDto, userId int64, roleId int) dto
 
 	if r := checkXrayNodeAccess(userId, roleId, existing.NodeId); r != nil {
 		return *r
+	}
+
+	// Non-admin: must own this inbound
+	if roleId != 0 && existing.UserId != userId {
+		return dto.Err("无权操作此入站")
 	}
 
 	// Port conflict check
@@ -313,6 +340,11 @@ func DeleteXrayInbound(id int64, userId int64, roleId int) dto.R {
 		return *r
 	}
 
+	// Non-admin: must own this inbound
+	if roleId != 0 && inbound.UserId != userId {
+		return dto.Err("无权操作此入站")
+	}
+
 	// Hot remove inbound first (no Xray restart needed)
 	result := pkg.XrayRemoveInbound(inbound.NodeId, inbound.Tag)
 	if result != nil && result.Msg != "OK" {
@@ -339,6 +371,11 @@ func EnableXrayInbound(id int64, userId int64, roleId int) dto.R {
 
 	if r := checkXrayNodeAccess(userId, roleId, inbound.NodeId); r != nil {
 		return *r
+	}
+
+	// Non-admin: must own this inbound
+	if roleId != 0 && inbound.UserId != userId {
+		return dto.Err("无权操作此入站")
 	}
 
 	DB.Model(&inbound).Updates(map[string]interface{}{
@@ -373,6 +410,11 @@ func DisableXrayInbound(id int64, userId int64, roleId int) dto.R {
 
 	if r := checkXrayNodeAccess(userId, roleId, inbound.NodeId); r != nil {
 		return *r
+	}
+
+	// Non-admin: must own this inbound
+	if roleId != 0 && inbound.UserId != userId {
+		return dto.Err("无权操作此入站")
 	}
 
 	// Hot remove inbound (no Xray restart needed)

@@ -412,15 +412,19 @@ export default function XrayInboundPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(ib)} title={t('xrayInbound.actions')} disabled={operatingIds.has(ib.id)}>
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleToggleEnable(ib)} title={ib.enable ? t('xrayInbound.disabledStatus') : t('xrayInbound.enabledStatus')} disabled={operatingIds.has(ib.id)}>
-                            {operatingIds.has(ib.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : ib.enable ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(ib.id)} className="text-destructive" title={t('xrayInbound.actions')} disabled={operatingIds.has(ib.id)}>
-                            {operatingIds.has(ib.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                          </Button>
+                          {(isAdmin || ib.isOwner) && (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => handleEdit(ib)} title={t('xrayInbound.actions')} disabled={operatingIds.has(ib.id)}>
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleToggleEnable(ib)} title={ib.enable ? t('xrayInbound.disabledStatus') : t('xrayInbound.enabledStatus')} disabled={operatingIds.has(ib.id)}>
+                                {operatingIds.has(ib.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : ib.enable ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleDelete(ib.id)} className="text-destructive" title={t('xrayInbound.actions')} disabled={operatingIds.has(ib.id)}>
+                                {operatingIds.has(ib.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

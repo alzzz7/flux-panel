@@ -151,6 +151,7 @@ func Setup(r *gin.Engine) {
 		// Xray Subscription
 		auth.POST("/xray/sub/token", handler.XraySubToken)
 		auth.POST("/xray/sub/links", handler.XraySubLinks)
+		auth.POST("/xray/sub/reset", handler.XraySubReset)
 
 		// Monitor
 		auth.POST("/monitor/node-health", middleware.Admin(), handler.MonitorNodeHealth)

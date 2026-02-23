@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Copy, RefreshCw, Rss, Link2, ExternalLink } from 'lucide-react';
+import { Copy, RefreshCw, RotateCcw, Rss, Link2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
-import { getSubscriptionToken, getSubscriptionLinks } from '@/lib/api/xray-subscription';
+import { getSubscriptionToken, getSubscriptionLinks, resetSubscriptionToken } from '@/lib/api/xray-subscription';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { useTranslation } from '@/lib/i18n';
 
@@ -48,6 +48,17 @@ export default function XraySubscriptionPage() {
   const copyToClipboard = (text: string, label?: string) => {
     navigator.clipboard.writeText(text);
     toast.success(t('xraySub.copied', { label: label || t('common.copySuccess') }));
+  };
+
+  const handleResetToken = async () => {
+    if (!confirm(t('xraySub.confirmReset'))) return;
+    const res = await resetSubscriptionToken();
+    if (res.code === 0) {
+      toast.success(t('xraySub.resetSuccess'));
+      loadData();
+    } else {
+      toast.error(res.msg || t('xraySub.resetFailed'));
+    }
   };
 
   const getProtocolIcon = (protocol: string) => {
@@ -110,6 +121,9 @@ export default function XraySubscriptionPage() {
               <Input value={subUrl} readOnly className="font-mono text-sm" />
               <Button onClick={() => copyToClipboard(subUrl, t('xraySub.subAddrCopied'))}>
                 <Copy className="mr-2 h-4 w-4" />{t('xraySub.copySubAddr')}
+              </Button>
+              <Button variant="destructive" onClick={handleResetToken}>
+                <RotateCcw className="mr-2 h-4 w-4" />{t('xraySub.resetToken')}
               </Button>
             </div>
           ) : (

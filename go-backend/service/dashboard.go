@@ -34,6 +34,16 @@ func GetAdminDashboardStats() dto.R {
 	trafficData := getTrafficData(0)
 	xrayData := getXrayTrafficData(0)
 
+	// Total accumulated traffic from all users (real-time, not snapshot-based)
+	type flowSum struct {
+		Total int64
+	}
+	var totalGost, totalXray flowSum
+	DB.Model(&model.User{}).Where("role_id != 0").
+		Select("COALESCE(SUM(in_flow + out_flow), 0) as total").Scan(&totalGost)
+	DB.Model(&model.User{}).Where("role_id != 0").
+		Select("COALESCE(SUM(xray_in_flow + xray_out_flow), 0) as total").Scan(&totalXray)
+
 	// Top 5 users by traffic (GOST + Xray combined)
 	type TopUser struct {
 		Name     string `json:"name" gorm:"column:user"`
@@ -73,6 +83,8 @@ func GetAdminDashboardStats() dto.R {
 		"trafficHistory":     trafficData.history,
 		"todayXrayTraffic":   xrayData.todayFlow,
 		"xrayTrafficHistory": xrayData.history,
+		"totalGostFlow":      totalGost.Total,
+		"totalXrayFlow":      totalXray.Total,
 		"topUsers":           topUsers,
 		"nodeList":           nodeList,
 	})

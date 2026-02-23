@@ -3,6 +3,7 @@ package model
 type XrayInbound struct {
 	ID                 int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	NodeId             int64  `gorm:"column:node_id" json:"nodeId"`
+	UserId             int64  `gorm:"column:user_id" json:"userId"`
 	Tag                string `gorm:"column:tag" json:"tag"`
 	Protocol           string `gorm:"column:protocol" json:"protocol"`
 	Listen             string `gorm:"column:listen" json:"listen"`
