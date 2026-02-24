@@ -175,7 +175,7 @@ func processFlowData(flowData dto.FlowDto) string {
 		return "ok"
 	}
 
-	flowType := 2
+	flowType := 1
 	var trafficRatio float64 = 1.0
 	var tunnel model.Tunnel
 	if err := DB.First(&tunnel, forward.TunnelId).Error; err == nil {
