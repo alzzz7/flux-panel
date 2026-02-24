@@ -254,7 +254,7 @@ function AdminDashboard({ stats, updateInfo }: { stats: any; updateInfo: UpdateI
           <CardHeader>
             <CardTitle className="text-sm font-medium">{t('dashboard.nodeOverview')}</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -272,8 +272,8 @@ function AdminDashboard({ stats, updateInfo }: { stats: any; updateInfo: UpdateI
                 ) : (
                   (stats.nodeList || []).map((node: any) => (
                     <TableRow key={node.id}>
-                      <TableCell className="font-medium">{node.name}</TableCell>
-                      <TableCell className="text-sm">{node.serverIp}</TableCell>
+                      <TableCell className="font-medium max-w-[100px] truncate">{node.name}</TableCell>
+                      <TableCell className="text-sm max-w-[160px] truncate font-mono text-xs" title={node.serverIp}>{node.serverIp}</TableCell>
                       <TableCell>
                         <Badge variant={node.status === 1 ? 'default' : 'destructive'}>
                           {node.status === 1 ? t('common.online') : t('common.offline')}
@@ -293,7 +293,7 @@ function AdminDashboard({ stats, updateInfo }: { stats: any; updateInfo: UpdateI
           <CardHeader>
             <CardTitle className="text-sm font-medium">{t('dashboard.userTrafficRank')}</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
