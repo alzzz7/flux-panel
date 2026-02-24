@@ -89,10 +89,13 @@ cat > /etc/gost/config.json << EOF
 }
 EOF
 
-# Ensure runtime config file exists
-if [ ! -f /etc/gost/gost.json ]; then
-    echo "{}" > /etc/gost/gost.json
+# Ensure runtime config file exists (migrate legacy gost.json → runtime.json)
+if [ -f /etc/gost/gost.json ] && [ ! -f /etc/gost/runtime.json ]; then
+    mv /etc/gost/gost.json /etc/gost/runtime.json
+elif [ ! -f /etc/gost/runtime.json ]; then
+    echo "{}" > /etc/gost/runtime.json
 fi
+rm -f /etc/gost/gost.json
 
 # Create systemd service
 cat > /etc/systemd/system/gost-node.service << EOF
@@ -270,6 +273,10 @@ if systemctl is-active --quiet gost-node 2>/dev/null; then
     systemctl disable gost-node 2>/dev/null || true
     rm -f /etc/systemd/system/gost-node.service
 fi
+# Clean up legacy installation
+rm -f /usr/local/bin/gost-node
+rm -f /usr/local/bin/xray
+rm -rf /etc/gost
 rm -f "/usr/local/bin/$DISGUISE"
 
 # Download binary

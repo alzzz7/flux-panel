@@ -112,6 +112,14 @@ func init() {
 }
 
 func main() {
+	// Migrate legacy gost.json → runtime.json (backward compat)
+	if _, err := os.Stat("runtime.json"); os.IsNotExist(err) {
+		if _, err := os.Stat("gost.json"); err == nil {
+			os.Rename("gost.json", "runtime.json")
+		}
+	}
+	os.Remove("gost.json")
+
 	// 加载配置文件
 	config, err := LoadConfig("config.json")
 	if err != nil {
