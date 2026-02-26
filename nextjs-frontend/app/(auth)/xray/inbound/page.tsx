@@ -73,7 +73,7 @@ export default function XrayInboundPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const promises: Promise<any>[] = [getXrayInboundList(), getAccessibleNodeList()];
+    const promises: Promise<any>[] = [getXrayInboundList(), getAccessibleNodeList({ xrayOnly: true })];
     if (isAdmin) promises.push(getAllUsers());
 
     const results = await Promise.all(promises);

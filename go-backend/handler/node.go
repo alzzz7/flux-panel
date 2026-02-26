@@ -76,7 +76,12 @@ func NodeDelete(c *gin.Context) {
 func NodeListAccessible(c *gin.Context) {
 	userId := GetUserId(c)
 	roleId := GetRoleId(c)
-	c.JSON(http.StatusOK, service.GetUserAccessibleNodes(userId, roleId))
+	var d struct {
+		XrayOnly bool `json:"xrayOnly"`
+		GostOnly bool `json:"gostOnly"`
+	}
+	_ = c.ShouldBindJSON(&d)
+	c.JSON(http.StatusOK, service.GetUserAccessibleNodes(userId, roleId, d.XrayOnly, d.GostOnly))
 }
 
 func NodeInstall(c *gin.Context) {

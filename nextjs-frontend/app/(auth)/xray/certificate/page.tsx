@@ -38,7 +38,7 @@ export default function XrayCertificatePage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [certRes, nodeRes] = await Promise.all([getXrayCertList(), getAccessibleNodeList()]);
+    const [certRes, nodeRes] = await Promise.all([getXrayCertList(), getAccessibleNodeList({ xrayOnly: true })]);
     if (certRes.code === 0) setCerts(certRes.data || []);
     if (nodeRes.code === 0) setNodes(nodeRes.data || []);
     setLoading(false);

@@ -36,8 +36,8 @@ export default function ForwardPage() {
   const [latencyMap, setLatencyMap] = useState<Record<number, { latency: number; success: boolean } | null>>({});
   const initialLoad = useRef(true);
 
-  // Collapsible tunnel groups
-  const [collapsedTunnels, setCollapsedTunnels] = useState<Set<string>>(new Set());
+  // Collapsible group state. Undefined means "use default for current view mode".
+  const [groupCollapsed, setGroupCollapsed] = useState<Record<string, boolean>>({});
 
   // Card/Table view toggle
   const [viewMode, setViewMode] = useState<'card' | 'table'>(() => {
@@ -55,12 +55,16 @@ export default function ForwardPage() {
     localStorage.setItem('forward_view', mode);
   };
 
-  const toggleCollapse = (tunnelId: string) => {
-    setCollapsedTunnels(prev => {
-      const next = new Set(prev);
-      if (next.has(tunnelId)) next.delete(tunnelId);
-      else next.add(tunnelId);
-      return next;
+  const isGroupCollapsed = (groupKey: string, defaultCollapsed: boolean) => {
+    const state = groupCollapsed[groupKey];
+    return state === undefined ? defaultCollapsed : state;
+  };
+
+  const toggleCollapse = (groupKey: string, defaultCollapsed: boolean) => {
+    setGroupCollapsed(prev => {
+      const current = prev[groupKey];
+      const currentValue = current === undefined ? defaultCollapsed : current;
+      return { ...prev, [groupKey]: !currentValue };
     });
   };
 
@@ -89,7 +93,11 @@ export default function ForwardPage() {
 
   const loadData = useCallback(async () => {
     if (initialLoad.current) setLoading(true);
-    const [forwardRes, tunnelRes, nodeRes] = await Promise.all([getForwardList(), userTunnel(), getAccessibleNodeList()]);
+    const [forwardRes, tunnelRes, nodeRes] = await Promise.all([
+      getForwardList(),
+      userTunnel(),
+      getAccessibleNodeList({ gostOnly: true }),
+    ]);
     const fwds = forwardRes.code === 0 ? (forwardRes.data || []) : [];
     if (forwardRes.code === 0) setForwards(fwds);
     if (tunnelRes.code === 0) setTunnels(tunnelRes.data || []);
@@ -239,7 +247,7 @@ export default function ForwardPage() {
     </div>
   );
 
-  const renderForwardList = (list: any[]) => {
+  const renderForwardList = (list: any[], groupBy: 'tunnel' | 'user' = 'tunnel') => {
     const isFiltered = filterTunnelId && filterTunnelId !== 'all';
     const filtered = isFiltered
       ? list.filter(f => f.tunnelId?.toString() === filterTunnelId)
@@ -277,19 +285,33 @@ export default function ForwardPage() {
       );
     }
 
-    // Group by tunnel
+    // Group rows by selected dimension
     const groups: Record<string, any[]> = {};
+    const groupLabels: Record<string, string> = {};
     const order: string[] = [];
     for (const f of filtered) {
-      const tid = String(f.tunnelId);
-      if (!groups[tid]) {
-        groups[tid] = [];
-        order.push(tid);
+      let groupKey = '';
+      let groupLabel = '';
+
+      if (groupBy === 'user') {
+        const userKey = f.userId != null ? String(f.userId) : (f.userName || '-');
+        groupKey = `user:${userKey}`;
+        groupLabel = f.userName || `#${userKey}`;
+      } else {
+        const tunnelKey = String(f.tunnelId);
+        groupKey = `tunnel:${tunnelKey}`;
+        groupLabel = f.tunnelName || tunnelKey;
       }
-      groups[tid].push(f);
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = [];
+        groupLabels[groupKey] = groupLabel;
+        order.push(groupKey);
+      }
+      groups[groupKey].push(f);
     }
 
-    const showGroups = !isFiltered && tunnels.length > 1;
+    const showGroups = groupBy === 'user' ? true : (!isFiltered && tunnels.length > 1);
     const colSpan = isAdmin ? 9 : 8;
 
     if (viewMode === 'table') {
@@ -312,20 +334,23 @@ export default function ForwardPage() {
               </TableHeader>
               <TableBody>
                 {showGroups ? (
-                  order.map(tid => {
-                    const groupForwards = groups[tid];
-                    const tunnelName = groupForwards[0]?.tunnelName || tid;
-                    const isCollapsed = collapsedTunnels.has(tid);
+                  order.map(groupKey => {
+                    const groupForwards = groups[groupKey];
+                    const groupLabel = groupLabels[groupKey] || groupKey;
+                    const collapsed = isGroupCollapsed(groupKey, false);
+                    const title = groupBy === 'user'
+                      ? `${t('forward.user')}: ${groupLabel}`
+                      : groupLabel;
                     return [
-                      <TableRow key={`group-${tid}`} className="bg-muted/50 hover:bg-muted/50 cursor-pointer" onClick={() => toggleCollapse(tid)}>
+                      <TableRow key={`group-${groupKey}`} className="bg-muted/50 hover:bg-muted/50 cursor-pointer" onClick={() => toggleCollapse(groupKey, false)}>
                         <TableCell colSpan={colSpan} className="py-1.5 text-xs font-semibold text-muted-foreground">
                           <div className="flex items-center gap-1">
-                            {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                            {tunnelName} ({groupForwards.length})
+                            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            {title} ({groupForwards.length})
                           </div>
                         </TableCell>
                       </TableRow>,
-                      ...(!isCollapsed ? groupForwards.map((f: any) => (
+                      ...(!collapsed ? groupForwards.map((f: any) => (
                         <TableRow key={f.id}>
                           <TableCell className="font-medium">{f.name}</TableCell>
                           {isAdmin && <TableCell className="text-sm text-muted-foreground">{f.userName || '-'}</TableCell>}
@@ -400,20 +425,23 @@ export default function ForwardPage() {
     if (showGroups) {
       return (
         <div className="space-y-4">
-          {order.map(tid => {
-            const groupForwards = groups[tid];
-            const tunnelName = groupForwards[0]?.tunnelName || tid;
-            const isCollapsed = collapsedTunnels.has(tid);
+          {order.map(groupKey => {
+            const groupForwards = groups[groupKey];
+            const groupLabel = groupLabels[groupKey] || groupKey;
+            const collapsed = isGroupCollapsed(groupKey, true);
+            const title = groupBy === 'user'
+              ? `${t('forward.user')}: ${groupLabel}`
+              : groupLabel;
             return (
-              <div key={tid}>
+              <div key={groupKey}>
                 <button
                   className="flex items-center gap-1 text-sm font-semibold text-muted-foreground mb-2 hover:text-foreground"
-                  onClick={() => toggleCollapse(tid)}
+                  onClick={() => toggleCollapse(groupKey, true)}
                 >
-                  {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  {tunnelName} ({groupForwards.length})
+                  {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  {title} ({groupForwards.length})
                 </button>
-                {!isCollapsed && (
+                {!collapsed && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                     {groupForwards.map(renderCard)}
                   </div>
@@ -480,10 +508,10 @@ export default function ForwardPage() {
               <TabsTrigger value="user">{t('forward.userForwards')} ({userForwards.length})</TabsTrigger>
             </TabsList>
           </Tabs>
-          {activeTab === 'admin' ? renderForwardList(adminForwards) : renderForwardList(userForwards)}
+          {activeTab === 'admin' ? renderForwardList(adminForwards, 'tunnel') : renderForwardList(userForwards, 'user')}
         </div>
       ) : (
-        renderForwardList(forwards)
+        renderForwardList(forwards, 'tunnel')
       )}
 
       {/* Diagnose Dialog */}

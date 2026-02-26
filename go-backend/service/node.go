@@ -246,7 +246,7 @@ func UpdateNodeOrder(items []dto.OrderItem) dto.R {
 	return dto.Ok("排序更新成功")
 }
 
-func GetUserAccessibleNodes(userId int64, roleId int) dto.R {
+func GetUserAccessibleNodes(userId int64, roleId int, xrayOnly bool, gostOnly bool) dto.R {
 	var nodes []model.Node
 	if roleId == 0 {
 		// Admin: return all nodes
@@ -259,8 +259,14 @@ func GetUserAccessibleNodes(userId int64, roleId int) dto.R {
 			// Legacy user with no records: return all nodes
 			DB.Order("inx ASC, created_time DESC").Find(&nodes)
 		} else {
-			DB.Where("id IN (?)", DB.Model(&model.UserNode{}).Select("node_id").Where("user_id = ?", userId)).
-				Order("inx ASC, created_time DESC").Find(&nodes)
+			query := DB.Model(&model.UserNode{}).Select("node_id").Where("user_id = ?", userId)
+			if xrayOnly {
+				query = query.Where("xray_enabled = 1")
+			}
+			if gostOnly {
+				query = query.Where("gost_enabled = 1")
+			}
+			DB.Where("id IN (?)", query).Order("inx ASC, created_time DESC").Find(&nodes)
 		}
 	}
 
